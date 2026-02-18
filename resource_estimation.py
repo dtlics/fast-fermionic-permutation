@@ -33,6 +33,21 @@ PermutationKind = Literal["random", "transpose", "reverse", "identity"]
 PlotMetric = Literal["success_probability", "error_sum_total", "weighted_count_metric"]
 
 _FSWAP_SYNTH_TEMPLATE_OPS: Optional[Tuple[cirq.Operation, ...]] = None
+CACHE_PATH_ENV_VAR = "FFP_CACHE_CSV_PATH"
+DEFAULT_CACHE_CSV_PATH = Path(__file__).resolve().with_name("resource_estimation_cache.csv")
+
+
+def _resolve_cache_csv_path(cache_csv_path: Optional[str | os.PathLike[str]] = None) -> Path:
+    if cache_csv_path is not None:
+        explicit_path = os.fspath(cache_csv_path).strip()
+        if explicit_path:
+            return Path(explicit_path).expanduser()
+
+    env_path = os.environ.get(CACHE_PATH_ENV_VAR, "").strip()
+    if env_path:
+        return Path(env_path).expanduser()
+
+    return DEFAULT_CACHE_CSV_PATH
 
 
 def validate_permutation(permutation: Sequence[int], n: int) -> None:
@@ -831,9 +846,7 @@ def run_weighted_metric_study_with_cache(
     idle_multiplier: float = 0.01,
     other_2q_cnot_equivalent: float = 1.0,
     max_runtime_minutes: float = 90.0,
-    cache_csv_path: str = (
-        "/Users/dantongli/Desktop/efficient-classical-shadow/fast fermionic permutation/resource_estimation_cache.csv"
-    ),
+    cache_csv_path: Optional[str | os.PathLike[str]] = None,
     single_qubit_error: float = 1e-3,
     two_qubit_error: float = 1e-4,
     measurement_error: float = 1e-4,
@@ -853,7 +866,7 @@ def run_weighted_metric_study_with_cache(
         "other_2q_cnot_equivalent": float(other_2q_cnot_equivalent),
     }
     cache_key_cols = ["method", "L"] + list(cache_config.keys())
-    cache_path = Path(cache_csv_path)
+    cache_path = _resolve_cache_csv_path(cache_csv_path)
 
     if cache_path.exists():
         try:
