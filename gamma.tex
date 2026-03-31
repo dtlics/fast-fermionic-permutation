@@ -1,3 +1,9 @@
+% Verification: Algorithms 4 (PipelineSameSkip), 5 (PipelineSameCross), and
+% 6 (ApplyGamma) verified gate-by-gate against pipelined_gamma.py and
+% Gamma.ipynb Construction 3.  All pass for L=3..15 (500 samples each).
+% Depth formula: 8L+9 (odd L>=5), 8L+10 (even L>=6).
+% Z correction condition: (L-1-c) mod 2 = 1, equivalently (t+L) is odd.
+
 \subsection{Ancilla-free $\Gamma$ circuit}
 \label{sec:gamma-impl}
 
