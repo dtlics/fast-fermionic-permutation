@@ -67,9 +67,13 @@ def make_system_qubits(L: int) -> Dict[Tuple[int, int], cirq.GridQubit]:
     return {(r, c): cirq.GridQubit(r, c) for r in range(L) for c in range(L)}
 
 
-def make_ancilla_qubits(L: int) -> Dict[int, cirq.NamedQubit]:
-    """Create L ancilla qubits (one per row), used by Baseline 2."""
-    return {r: cirq.NamedQubit(f"anc_r{r}") for r in range(L)}
+def make_ancilla_qubits(L: int) -> Dict[int, cirq.GridQubit]:
+    """Create L ancilla qubits at column L (one per row), used by Baseline 2.
+
+    Ancillas are placed one column to the right of the data grid,
+    physically adjacent to the rightmost data column (L-1).
+    """
+    return {r: cirq.GridQubit(r, L) for r in range(L)}
 
 
 # ---------------------------------------------------------------------------

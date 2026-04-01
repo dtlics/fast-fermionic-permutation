@@ -72,12 +72,39 @@ def get_phase_with_ancillas(circuit, sys_qubits, anc_qubits, basis_state_int):
 # Depth formula tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("L", [3, 5, 7, 9, 11, 15])
+@pytest.mark.parametrize("L", [7, 9, 11, 15])
 def test_gamma_ancilla_depth(L):
-    """Verify ancilla Gamma depth = 7L - 3."""
+    """Verify ancilla Gamma physical NN depth = 18L - 1 (exact for L >= 7).
+
+    Stages: A (L-1) + B (10*L) + C (L-1) + D (6*L) + diag (1) = 18L - 1.
+    All gates are NN on the (L+1)-column grid.  No pipelining across steps.
+    For L < 7, cirq's scheduler packs more tightly (fewer skip-row pairs).
+    """
     circ, _, _ = build_gamma_with_ancillas(L)
-    expected = 7 * L - 3
+    expected = 18 * L - 1
     assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+
+
+@pytest.mark.parametrize("L", [3, 5, 7])
+def test_ancilla_gamma_all_nn(L):
+    """Every 2q gate in the ancilla Gamma is between NN GridQubits."""
+    circ, _, _ = build_gamma_with_ancillas(L)
+    for i, moment in enumerate(circ):
+        used = set()
+        for op in moment:
+            # No qubit conflicts within a moment
+            for q in op.qubits:
+                assert q not in used, f"L={L} moment {i}: qubit {q} used twice"
+                used.add(q)
+            if len(op.qubits) == 2:
+                q0, q1 = op.qubits
+                assert isinstance(q0, cirq.GridQubit) and isinstance(q1, cirq.GridQubit), (
+                    f"L={L} moment {i}: non-GridQubit gate {op}"
+                )
+                dist = abs(q0.row - q1.row) + abs(q0.col - q1.col)
+                assert dist == 1, (
+                    f"L={L} moment {i}: non-NN gate {op.gate} on {q0},{q1} (dist={dist})"
+                )
 
 
 @pytest.mark.parametrize("L", [5, 7, 9, 11, 15])
