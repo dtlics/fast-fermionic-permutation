@@ -1,25 +1,22 @@
 """Metrics for fermionic permutation circuit evaluation.
 
-Two metrics (both ignore single-qubit gate layers):
+Three metrics (all ignore single-qubit gate layers):
 
-1. **Spacetime volume**: S = total_qubits * two_q_gate_depth
-   - total_qubits = data + ancilla (all qubits in the circuit)
-   - two_q_gate_depth = number of moments with at least one 2-qubit gate
+1. **CNOT depth**: Number of CNOT/CZ-equivalent depth layers.
+   FSWAP moments contribute 2 layers (FSWAP decomposes into 2 entangling
+   layers); CNOT/CZ-only moments contribute 1 layer.
 
-2. **Counting + union bound error bound**:
-   - At each 2-qubit-gate moment, count both 2-qubit gates AND idle qubits
-   - idle = total_qubits - 2 * (number of 2q ops in that moment)
-   - Union bound: P(fail) <= G * p_2q + I * p_idle
-   - F_est >= 1 - (G * p_2q + I * p_idle)
-   - where G = total 2q gates, I = total idle-qubit-moments
+2. **Spacetime volume**: S = total_qubits * cnot_depth
+
+3. **Multiplicative fidelity estimate**: F = (1-p_2q)^G * (1-p_idle)^I
+   where G = total 2q gates, I = total idle-qubit-moments
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict
 
 import cirq
-import numpy as np
 
 from common.fswap import FSWAP_CNOT_COST, is_fswap
 
@@ -38,14 +35,10 @@ def count_resources(circuit: cirq.Circuit, L: int, n_ancillas: int = 0) -> Dict:
     contribute to depth and idle-slot counts (single-qubit-only moments are
     ignored -- single-qubit gates are "free").
 
-    Args:
-        circuit: the cirq.Circuit to analyse
-        L: grid side length (N = L^2 data qubits)
-        n_ancillas: number of ancilla qubits (0 for ancilla-free methods)
-
     Returns:
         dict with keys:
             L, N, n_ancillas, total_qubits,
+            cnot_depth,     -- CNOT/CZ-equivalent depth (FSWAP moments = 2)
             two_q_depth,    -- moments with >= 1 two-qubit gate
             total_2q_gates, -- total number of 2-qubit gate applications
             total_cnots,    -- CNOT-equivalent count (FSWAP=2, CZ/CNOT=1)
@@ -55,24 +48,28 @@ def count_resources(circuit: cirq.Circuit, L: int, n_ancillas: int = 0) -> Dict:
     total_qubits = N + n_ancillas
 
     two_q_depth = 0
+    cnot_depth = 0
     total_2q_gates = 0
     total_cnots = 0
     total_idle_slots = 0
 
     for moment in circuit:
         n_2q_in_moment = 0
+        has_fswap = False
         for op in moment:
             if len(op.qubits) >= 2:
                 n_2q_in_moment += 1
                 if is_fswap(op.gate):
                     total_cnots += FSWAP_CNOT_COST
+                    has_fswap = True
                 else:
                     total_cnots += 1
 
         if n_2q_in_moment > 0:
             two_q_depth += 1
+            # FSWAP decomposes into 2 CNOT-depth layers; CNOT/CZ = 1 layer
+            cnot_depth += 2 if has_fswap else 1
             total_2q_gates += n_2q_in_moment
-            # Each 2q gate uses 2 qubits; the rest are idle
             active_qubits = 2 * n_2q_in_moment
             total_idle_slots += max(0, total_qubits - active_qubits)
 
@@ -81,6 +78,7 @@ def count_resources(circuit: cirq.Circuit, L: int, n_ancillas: int = 0) -> Dict:
         "N": N,
         "n_ancillas": n_ancillas,
         "total_qubits": total_qubits,
+        "cnot_depth": cnot_depth,
         "two_q_depth": two_q_depth,
         "total_2q_gates": total_2q_gates,
         "total_cnots": total_cnots,
@@ -92,30 +90,22 @@ def count_resources(circuit: cirq.Circuit, L: int, n_ancillas: int = 0) -> Dict:
 # Metric 1: Spacetime volume
 # ---------------------------------------------------------------------------
 
-def spacetime_volume(total_qubits: int, two_q_depth: int) -> int:
-    """Spacetime volume: S = total_qubits * two_q_gate_depth.
-
-    Args:
-        total_qubits: data + ancilla qubit count
-        two_q_depth: number of moments containing >= 1 two-qubit gate
-    """
-    return total_qubits * two_q_depth
+def spacetime_volume(total_qubits: int, cnot_depth: int) -> int:
+    """Spacetime volume: S = total_qubits * cnot_depth."""
+    return total_qubits * cnot_depth
 
 
 # ---------------------------------------------------------------------------
-# Metric 2: Counting + union bound fidelity
+# Metric 2: Multiplicative fidelity estimate
 # ---------------------------------------------------------------------------
 
-def counting_union_bound_fidelity(
+def multiplicative_fidelity(
     total_2q_gates: int,
     total_idle_slots: int,
     p_2q: float = 1e-3,
-    p_idle: float = 1e-5,
+    p_idle: float = 1e-4,
 ) -> float:
-    """Lower bound on fidelity via counting + union bound.
-
-    P(fail) <= G * p_2q + I * p_idle       (union bound)
-    F_est  >= 1 - (G * p_2q + I * p_idle)  (complementary)
+    """Fidelity estimate: F = (1-p_2q)^G * (1-p_idle)^I.
 
     Args:
         total_2q_gates: G -- total two-qubit gate applications
@@ -124,10 +114,9 @@ def counting_union_bound_fidelity(
         p_idle: error rate per idle qubit per time step
 
     Returns:
-        fidelity lower bound (may be negative for very noisy circuits;
-        clamp to 0 if needed)
+        estimated fidelity in [0, 1]
     """
-    return 1.0 - (total_2q_gates * p_2q + total_idle_slots * p_idle)
+    return (1.0 - p_2q) ** total_2q_gates * (1.0 - p_idle) ** total_idle_slots
 
 
 # ---------------------------------------------------------------------------
@@ -137,14 +126,9 @@ def counting_union_bound_fidelity(
 def evaluate_fp(
     result: "FPResult",
     p_2q: float = 1e-3,
-    p_idle: float = 1e-5,
+    p_idle: float = 1e-4,
 ) -> Dict:
     """Compute all metrics for a fermionic permutation circuit result.
-
-    Args:
-        result: FPResult from build_fp_1d or build_fp_2d
-        p_2q: error rate per two-qubit gate
-        p_idle: error rate per idle qubit per time step
 
     Returns:
         dict with all count_resources fields plus:
@@ -154,9 +138,9 @@ def evaluate_fp(
         result.circuit, result.L, len(result.anc_qubits)
     )
     resources["spacetime_volume"] = spacetime_volume(
-        resources["total_qubits"], resources["two_q_depth"]
+        resources["total_qubits"], resources["cnot_depth"]
     )
-    resources["fidelity"] = counting_union_bound_fidelity(
+    resources["fidelity"] = multiplicative_fidelity(
         resources["total_2q_gates"],
         resources["total_idle_slots"],
         p_2q=p_2q,

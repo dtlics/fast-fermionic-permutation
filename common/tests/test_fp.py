@@ -20,7 +20,7 @@ from common.hall_decomposition import decompose_permutation_rcr
 from common.oet_sort import fswap_odd_even_sort_ops
 from common.fp_1d import build_fp_1d, structured_permutations
 from common.fp_2d import build_fp_2d, GammaMethod, FPResult
-from common.metrics import count_resources, spacetime_volume, counting_union_bound_fidelity, evaluate_fp
+from common.metrics import count_resources, spacetime_volume, multiplicative_fidelity, evaluate_fp
 
 
 # ---------------------------------------------------------------------------
@@ -276,15 +276,58 @@ def test_pipelined_depth_better_than_primitive(L):
 # ---------------------------------------------------------------------------
 
 def test_spacetime_volume_formula():
-    """Spacetime volume = total_qubits * two_q_depth."""
+    """Spacetime volume = total_qubits * cnot_depth."""
     assert spacetime_volume(25, 100) == 2500
     assert spacetime_volume(30, 0) == 0
 
 
+def test_cnot_depth_fswap_counts_as_two():
+    """FSWAP moments contribute 2 to CNOT depth, CNOT/CZ moments contribute 1.
+
+    The 1D baseline is pure FSWAPs, so cnot_depth = 2 * two_q_depth.
+    The 2D baselines have mixed FSWAP and CNOT/CZ moments.
+    """
+    L = 6
+    perm = structured_permutations(L)["reverse"]
+
+    # 1D: all FSWAPs -> cnot_depth = 2 * moment_depth
+    r_1d = build_fp_1d(L, perm)
+    res_1d = count_resources(r_1d.circuit, L, 0)
+    assert res_1d["cnot_depth"] == 2 * res_1d["two_q_depth"], (
+        f"1D cnot_depth should be 2x two_q_depth: {res_1d['cnot_depth']} vs {2*res_1d['two_q_depth']}"
+    )
+
+    # 2D pipelined: mixed -> cnot_depth > two_q_depth but < 2 * two_q_depth
+    r_pipe = build_fp_2d(L, perm, GammaMethod.PIPELINED)
+    res_pipe = count_resources(r_pipe.circuit, L, 0)
+    assert res_pipe["cnot_depth"] > res_pipe["two_q_depth"], (
+        "Pipelined cnot_depth should exceed two_q_depth (has FSWAP moments)"
+    )
+    assert res_pipe["cnot_depth"] < 2 * res_pipe["two_q_depth"], (
+        "Pipelined cnot_depth should be less than 2x two_q_depth (has CNOT-only moments)"
+    )
+
+
+def test_cnot_depth_crossover():
+    """At L >= 12, pipelined CNOT depth should be less than 1D CNOT depth."""
+    L = 14
+    perm = structured_permutations(L)["reverse"]
+
+    r_1d = build_fp_1d(L, perm)
+    r_pipe = build_fp_2d(L, perm, GammaMethod.PIPELINED)
+
+    res_1d = count_resources(r_1d.circuit, L, 0)
+    res_pipe = count_resources(r_pipe.circuit, L, 0)
+
+    assert res_pipe["cnot_depth"] < res_1d["cnot_depth"], (
+        f"At L={L}, pipelined ({res_pipe['cnot_depth']}) should beat 1D ({res_1d['cnot_depth']})"
+    )
+
+
 def test_fidelity_formula():
-    """Fidelity >= 1 - (G*p_2q + I*p_idle) via union bound."""
-    f = counting_union_bound_fidelity(100, 200, p_2q=0.001, p_idle=0.0001)
-    expected = 1.0 - (100 * 0.001 + 200 * 0.0001)
+    """Fidelity = (1-p_2q)^G * (1-p_idle)^I."""
+    f = multiplicative_fidelity(100, 200, p_2q=0.001, p_idle=0.0001)
+    expected = (1.0 - 0.001) ** 100 * (1.0 - 0.0001) ** 200
     assert abs(f - expected) < 1e-12
 
 
@@ -301,7 +344,7 @@ def test_evaluate_fp_consistency():
     assert metrics["two_q_depth"] == resources["two_q_depth"]
     assert metrics["total_2q_gates"] == resources["total_2q_gates"]
     assert metrics["total_idle_slots"] == resources["total_idle_slots"]
-    assert metrics["spacetime_volume"] == resources["total_qubits"] * resources["two_q_depth"]
+    assert metrics["spacetime_volume"] == resources["total_qubits"] * resources["cnot_depth"]
     assert metrics["gamma_method"] == "pipelined"
 
 
