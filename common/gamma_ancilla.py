@@ -6,15 +6,31 @@ via advance primitives.  All gates are nearest-neighbor on the
 
 Stages:
     A: Column parity cascade on data columns 0..L-1       (L-1 depth)
-    B: Leftward sweep with parity-basis CZ gates           (~9L depth)
+    B: Leftward sweep with parity-basis CZ gates           (~8L depth)
     C: Undo column parity (displaced cols) + ancilla       (L-1 depth)
        cascade at column 0
-    D: Rightward sweep with original-basis CZ gates        (~4L depth)
+    D: Rightward sweep with original-basis CZ gates        (~3L depth)
+    Diagonal correction: vertical CZ per even-odd row pair (1 depth)
 
 After the circuit, data qubits return to columns 0..L-1 and ancillas
 return to column L.  Ancillas start and end in |0>.
 
-Depth per Gamma: ~15L.  Full algorithm: ~36L.
+Depth per Gamma: ~13L (exact for large L).
+
+Cross-step pipelining (achieved by cirq's greedy scheduler):
+  The ops within each column step are emitted in logical order (substeps
+  1→2→3), but all steps are fed to one cirq.Circuit() call, allowing
+  cirq to merge the tail of step p with the head of step p+1 when they
+  touch disjoint qubits.
+
+  Stage B savings (~2/step, 10 → ~8):
+    Substep 3 of step p (batch A + odd advance) overlaps with substep 1
+    of step p-1 (batch B SWAP), since they operate on disjoint row groups.
+
+  Stage D savings (~3/step, 6 → ~3):
+    Substep 3 of step p (odd advance) fully overlaps with substep 1 of
+    step p+1 (even advance), since even and odd rows are disjoint.
+    CZ gates also pack into advance moments on non-conflicting qubits.
 """
 
 from typing import Dict, List, Tuple
@@ -253,33 +269,41 @@ def build_gamma_with_ancillas(L: int, sq=None, aq=None):
           anc_list = [GridQubit(r,L) for r in range(L)]
           Ancillas must be initialised to |0> and return to |0>.
     """
-    # Stage A: column parity cascade
+    # Stage A: column parity cascade (no cross-stage merging with B)
     stage_a = cirq.Circuit(_build_stage_A(L))
 
-    # Stage B: leftward sweep (L column steps, no cross-step merging)
-    stage_b = cirq.Circuit()
+    # Stage B: leftward sweep.  All steps fed to one cirq.Circuit() so
+    # the greedy scheduler can pipeline across step boundaries.
+    # Savings: substep 3 of step p (batch A + odd advance) overlaps with
+    # substep 1 of step p-1 (batch B SWAP) on disjoint rows.  ~2/step.
+    stage_b_ops = []
     for p in range(L - 1, -1, -1):
-        stage_b += cirq.Circuit(_build_stage_B_step(p, L))
+        stage_b_ops.extend(_build_stage_B_step(p, L))
+    stage_b = cirq.Circuit(stage_b_ops)
 
-    # Stage C: undo column parity
+    # Stage C: undo column parity (no cross-stage merging)
     stage_c = cirq.Circuit(_build_stage_C(L))
 
-    # Stage D: rightward sweep (L column steps, no cross-step merging)
-    stage_d = cirq.Circuit()
+    # Stage D: rightward sweep.  All steps fed to one cirq.Circuit() so
+    # the greedy scheduler can pipeline across step boundaries.
+    # Savings: substep 3 of step p (odd advance) fully overlaps with
+    # substep 1 of step p+1 (even advance) on disjoint rows.  ~3/step.
+    stage_d_ops = []
     for p in range(L):
-        stage_d += cirq.Circuit(_build_stage_D_step(p, L))
+        stage_d_ops.extend(_build_stage_D_step(p, L))
 
     # Diagonal correction: Stage D's cross-row CZ produces T(s_{r+1}, s_r)
     # instead of T(s_r, s_{r+1}).  The difference is the diagonal:
     # ⊕_c s_{r,c} * s_{r+1,c}.  Correct with vertical CZ per column.
     # After Stage D, data is back at columns 0..L-1, so these are all NN.
-    diag_ops = []
+    # Appended to stage_d_ops so the greedy scheduler can absorb it into
+    # the last step's wrap-up moments.
     for r in range(0, L - 1, 2):
         for c in range(L):
-            diag_ops.append(cirq.CZ(cirq.GridQubit(r, c), cirq.GridQubit(r + 1, c)))
-    stage_diag = cirq.Circuit(diag_ops)
+            stage_d_ops.append(cirq.CZ(cirq.GridQubit(r, c), cirq.GridQubit(r + 1, c)))
+    stage_d = cirq.Circuit(stage_d_ops)
 
-    circuit = stage_a + stage_b + stage_c + stage_d + stage_diag
+    circuit = stage_a + stage_b + stage_c + stage_d
 
     sys_list = [cirq.GridQubit(r, c) for r in range(L) for c in range(L)]
     anc_list = [cirq.GridQubit(r, L) for r in range(L)]

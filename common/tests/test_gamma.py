@@ -74,15 +74,26 @@ def get_phase_with_ancillas(circuit, sys_qubits, anc_qubits, basis_state_int):
 
 @pytest.mark.parametrize("L", [7, 9, 11, 15])
 def test_gamma_ancilla_depth(L):
-    """Verify ancilla Gamma physical NN depth = 18L - 1 (exact for L >= 7).
+    """Verify ancilla Gamma physical NN depth with cross-step pipelining.
 
-    Stages: A (L-1) + B (10*L) + C (L-1) + D (6*L) + diag (1) = 18L - 1.
-    All gates are NN on the (L+1)-column grid.  No pipelining across steps.
-    For L < 7, cirq's scheduler packs more tightly (fewer skip-row pairs).
+    Without pipelining (step-separated): 18L - 1
+        A (L-1) + B (10*L) + C (L-1) + D (6*L) + diag (1)
+
+    With cirq greedy pipelining: ~13L
+        Stage B: ~8/step (substep 3 of step p overlaps substep 1 of step p-1)
+        Stage D: ~3/step (odd advance overlaps next even advance)
+
+    We verify depth <= 14L (conservative) to allow scheduler variance.
     """
     circ, _, _ = build_gamma_with_ancillas(L)
-    expected = 18 * L - 1
-    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+    # Greedy scheduler achieves ~13L; assert <= 14L as conservative bound
+    assert len(circ) <= 14 * L, (
+        f"L={L}: got {len(circ)}, expected <= {14 * L} (14L)"
+    )
+    # Also assert it's better than unpipelined 18L
+    assert len(circ) < 18 * L, (
+        f"L={L}: got {len(circ)}, expected < {18 * L} (18L unpipelined)"
+    )
 
 
 @pytest.mark.parametrize("L", [3, 5, 7])
