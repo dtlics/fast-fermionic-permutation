@@ -1,95 +1,69 @@
-# fast-fermionic-permutation
+# Ancilla-Free Fermionic Permutation on 2D Qubit Grids
 
-Research code for analyzing and visualizing fermionic permutation circuits on 2D grids.
-The repository compares:
+Research code for a MICRO 2026 paper on ancilla-free fermionic permutation (FP)
+with O(sqrt(N))-depth circuits on L x L nearest-neighbor grids.
 
-1. Baseline OpenFermion snake-order permutation.
-2. A custom ancilla-assisted row-CNOT construction.
+## Four Baselines
 
-## Start here (main content)
+All implement the **same unitary** -- they differ only in circuit structure.
 
-The primary content of this repo is the notebook: `FP.ipynb`.
-If you are new to this project, go through the notebook first, top to bottom.
+| Baseline | Method | CNOT Depth | Ancillas |
+|----------|--------|------------|----------|
+| 1 | 1D snake OET sort | O(N) ~ 2L^2 | 0 |
+| 2 | Row-Col-Row + Ancilla Gamma | O(sqrt(N)) ~ 20L | L |
+| 3 | Row-Col-Row + Ancilla-free Gamma (primitives) | O(sqrt(N)) ~ 24L | 0 |
+| 4 | Row-Col-Row + Ancilla-free Gamma (pipelined) | O(sqrt(N)) ~ 22L | **0** |
 
-Use the Python files only when needed:
+Baseline 4 is our best: O(sqrt(N)) depth with zero ancillas.
 
-- `resource_estimation.py` and `visualize_fermionic.py` hold implementation details and helper APIs used by the notebook.
-- You typically do not need to read these files unless you want to inspect internals or modify behavior.
+## Project Structure
 
-## Repository layout
+```
+common/                  # Core modules
+  grid.py                # Grid topology, snake JW indexing
+  fswap.py               # FSWAP gate definition
+  hall_decomposition.py   # Hall 3-stage Row-Col-Row decomposition
+  oet_sort.py            # Odd-even transposition sort
+  gamma_ancilla.py       # Baseline 2: Gamma with ancillas (7L-3 depth)
+  gamma_primitive.py     # Baseline 3: Ancilla-free Gamma (9L+12 depth)
+  gamma_pipeline.py      # Baseline 4: Pipelined Gamma (8L+O(1) depth)
+  fp_1d.py               # Baseline 1: 1D snake FSWAP sort
+  fp_2d.py               # Baselines 2-4: unified 2D FP builder
+  metrics.py             # Spacetime volume, union-bound fidelity, gate counting
+  tests/                 # pytest test suite
+exp1_fp/                 # Experiment 1: FP benchmarking
+exp2_ffft/               # Experiment 2: 2D FFFT
+exp3_syk/                # Experiment 3: Sparse SYK simulation
+paper_figures/           # Generated figures
+docs/                    # Documentation and writeups
+archive/                 # Legacy code (notebooks, visualization)
+```
 
-- `FP.ipynb`: interactive notebook for experiments and plots.
-- `resource_estimation.py`: supporting module for circuit/resource counting and scaling studies.
-- `visualize_fermionic.py`: supporting module for decomposition and visualization helpers.
-- `resource_estimation_cache.csv`: cached resource-estimation rows to avoid expensive reruns.
-- `visualization_demo_5x5/`: tracked demo visualization frames.
-- `visualization_hall_demo_5x5/`: additional visualization assets.
-- `Fermionic Permutation — Draft Writeup.md`: draft writeup notes.
-
-## Setup
+## Quick Start
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
+pytest common/tests/ -v
 ```
 
-## Quickstart (recommended): open the notebook
-
-```bash
-jupyter lab FP.ipynb
-```
-
-or
-
-```bash
-jupyter notebook FP.ipynb
-```
-
-## Optional: script-level usage (only if needed)
+## Usage
 
 ```python
-from resource_estimation import run_weighted_metric_study_with_cache, build_summary_table
-
-df = run_weighted_metric_study_with_cache(
-    L_values=[4, 6],
-    permutation_kind="random",
-    seed=0,
-)
-summary = build_summary_table(df)
-print(summary[["method", "L", "weighted_count_metric", "success_probability"]])
-```
-
-## Optional: generate visualization frames directly
-
-```python
-from visualize_fermionic import visualize_permutation
+from common.fp_1d import build_fp_1d, build_benchmark_permutation
+from common.fp_2d import build_fp_2d, GammaMethod
+from common.metrics import count_resources, spacetime_volume, counting_union_bound_fidelity
 
 L = 5
-perm = list(range(L * L - 1, -1, -1))  # Reverse permutation example.
-visualize_permutation(L, perm, output_dir="visualization_demo_5x5")
+perm = build_benchmark_permutation(L, "reverse")
+
+# Baseline 1: 1D
+circ_1d, qubits_1d = build_fp_1d(L, perm)
+
+# Baseline 4: Best (pipelined, 0 ancillas)
+circ_4, sys_4, _ = build_fp_2d(L, perm, GammaMethod.PIPELINED)
+
+# Compare resources
+r1 = count_resources(circ_1d, L)
+r4 = count_resources(circ_4, L)
+print(f"1D CNOT depth: {r1['cnot_depth']}, 2D pipelined: {r4['cnot_depth']}")
 ```
-
-## Cache behavior
-
-`run_weighted_metric_study_with_cache(...)` chooses cache path in this order:
-
-1. Explicit `cache_csv_path=...` argument.
-2. Environment variable `FFP_CACHE_CSV_PATH`.
-3. Repo-local default: `resource_estimation_cache.csv` (next to `resource_estimation.py`).
-
-Example override:
-
-```bash
-export FFP_CACHE_CSV_PATH=/tmp/resource_estimation_cache.csv
-```
-
-## Tracked artifacts policy
-
-This repo intentionally tracks:
-
-- `FP.ipynb`
-- `resource_estimation_cache.csv`
-- demo visualization PNG frames
-
-OS metadata files such as `.DS_Store` are ignored.

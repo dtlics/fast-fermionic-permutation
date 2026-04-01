@@ -4,6 +4,4 @@ numpy
 pandas
 matplotlib
 networkx
-sympy
-ipython
-jupyter
+pytest
