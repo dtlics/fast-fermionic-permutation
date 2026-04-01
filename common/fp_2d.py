@@ -5,27 +5,21 @@ All three baselines share the same Row-Col-Row decomposition structure:
 
 They differ only in the Gamma operator used:
     Baseline 2 (ANCILLA):   7L-3 depth, L ancillas
-    Baseline 3 (PRIMITIVE):  9L+12 depth, 0 ancillas
+    Baseline 3 (PRIMITIVE):  12L+8 depth, 0 ancillas
     Baseline 4 (PIPELINED):  8L+O(1) depth, 0 ancillas  <-- best
 """
 
 from enum import Enum
-from typing import List, Optional, Sequence, Tuple
+from typing import List, NamedTuple, Optional, Sequence
 
 import cirq
 
 from common.grid import make_ancilla_qubits, make_system_qubits, validate_permutation
 from common.hall_decomposition import decompose_permutation_rcr
 from common.oet_sort import fswap_odd_even_sort_ops
-from common.gamma_ancilla import (
-    ancilla_column_cascade_ops,
-    build_stage_B_ops,
-    build_stage_D_ops,
-    build_gamma_with_ancillas,
-)
+from common.gamma_ancilla import build_gamma_with_ancillas
 from common.gamma_primitive import build_gamma_ancilla_free
 from common.gamma_pipeline import build_gamma_pipelined
-from common.grid import column_parity_cascade_ops
 
 
 class GammaMethod(Enum):
@@ -35,11 +29,31 @@ class GammaMethod(Enum):
     PIPELINED = "pipelined"    # Baseline 4
 
 
+class FPResult(NamedTuple):
+    """Result of building a fermionic permutation circuit.
+
+    Attributes:
+        circuit: the cirq.Circuit implementing F_pi
+        sys_qubits: list of system (data) qubits in raster order
+        anc_qubits: list of ancilla qubits (empty [] if ancilla-free).
+                    Ancillas are assumed initialised to |0> and guaranteed
+                    to return to |0> after the circuit.
+        gamma_method: which Gamma was used ("ancilla", "primitive", "pipelined",
+                      or None for 1D baseline)
+        L: grid side length (N = L^2 data qubits)
+    """
+    circuit: cirq.Circuit
+    sys_qubits: List[cirq.Qid]
+    anc_qubits: List[cirq.Qid]
+    gamma_method: Optional[str]
+    L: int
+
+
 def build_fp_2d(
     L: int,
     perm: Sequence[int],
     gamma_method: GammaMethod = GammaMethod.PIPELINED,
-) -> Tuple[cirq.Circuit, List[cirq.Qid], Optional[List[cirq.Qid]]]:
+) -> FPResult:
     """Build 2D fermionic permutation circuit using Hall RCR + Gamma.
 
     Args:
@@ -48,7 +62,8 @@ def build_fp_2d(
         gamma_method: which Gamma construction to use
 
     Returns:
-        (circuit, sys_qubits, anc_qubits_or_None)
+        FPResult with circuit, sys_qubits, anc_qubits ([] if ancilla-free),
+        gamma_method name, and L.
     """
     N = L * L
     validate_permutation(list(perm), N)
@@ -57,7 +72,7 @@ def build_fp_2d(
     sq = make_system_qubits(L)
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
 
-    # Build row/col sort ops
+    # Build row/col sort ops using the same sq dict
     rowA_ops = []
     for r in range(L):
         row_qs = [sq[(r, c)] for c in range(L)]
@@ -73,49 +88,33 @@ def build_fp_2d(
         row_qs = [sq[(r, c)] for c in range(L)]
         rowB_ops.extend(fswap_odd_even_sort_ops(row_qs, s3[r]))
 
-    # Build Gamma and assemble
+    # Build Gamma with the SAME sq (and aq) to guarantee qubit identity
     if gamma_method == GammaMethod.ANCILLA:
         aq = make_ancilla_qubits(L)
+        gamma_circ, _, _ = build_gamma_with_ancillas(L, sq=sq, aq=aq)
         anc_list = [aq[r] for r in range(L)]
-
-        # Build gamma ops inline (not as separate circuit) to share qubit references
-        gamma_ops = []
-        gamma_ops.extend(column_parity_cascade_ops(sq, L, inverse=False))
-        gamma_ops.extend(build_stage_B_ops(sq, aq, L))
-        gamma_ops.extend(column_parity_cascade_ops(sq, L, inverse=True))
-        gamma_ops.extend(ancilla_column_cascade_ops(aq, L, inverse=True))
-        gamma_ops.extend(build_stage_D_ops(sq, aq, L))
-
-        circuit = (
-            cirq.Circuit(rowA_ops)
-            + cirq.Circuit(gamma_ops)
-            + cirq.Circuit(col_ops)
-            + cirq.Circuit(gamma_ops)
-            + cirq.Circuit(rowB_ops)
-        )
-        return circuit, sys_list, anc_list
-
     elif gamma_method == GammaMethod.PRIMITIVE:
-        gamma_circ, _ = build_gamma_ancilla_free(L)
-        circuit = (
-            cirq.Circuit(rowA_ops)
-            + gamma_circ
-            + cirq.Circuit(col_ops)
-            + gamma_circ
-            + cirq.Circuit(rowB_ops)
-        )
-        return circuit, sys_list, None
-
+        gamma_circ, _ = build_gamma_ancilla_free(L, sq=sq)
+        anc_list = []
     elif gamma_method == GammaMethod.PIPELINED:
-        gamma_circ, _ = build_gamma_pipelined(L)
-        circuit = (
-            cirq.Circuit(rowA_ops)
-            + gamma_circ
-            + cirq.Circuit(col_ops)
-            + gamma_circ
-            + cirq.Circuit(rowB_ops)
-        )
-        return circuit, sys_list, None
-
+        gamma_circ, _ = build_gamma_pipelined(L, sq=sq)
+        anc_list = []
     else:
         raise ValueError(f"Unknown gamma method: {gamma_method}")
+
+    # Assemble: RowA + Gamma + Col + Gamma + RowB
+    circuit = (
+        cirq.Circuit(rowA_ops)
+        + gamma_circ
+        + cirq.Circuit(col_ops)
+        + gamma_circ
+        + cirq.Circuit(rowB_ops)
+    )
+
+    return FPResult(
+        circuit=circuit,
+        sys_qubits=sys_list,
+        anc_qubits=anc_list,
+        gamma_method=gamma_method.value,
+        L=L,
+    )

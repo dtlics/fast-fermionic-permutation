@@ -23,7 +23,11 @@ from common.grid import (
 from common.oet_sort import fswap_odd_even_sort_ops
 
 
-def build_fp_1d(L: int, perm_raster: Sequence[int]):
+# Import FPResult so callers can use common.fp_1d.FPResult
+from common.fp_2d import FPResult
+
+
+def build_fp_1d(L: int, perm_raster: Sequence[int]) -> FPResult:
     """Build Baseline 1: 1D snake ordering + full FSWAP odd-even sort.
 
     Args:
@@ -31,7 +35,8 @@ def build_fp_1d(L: int, perm_raster: Sequence[int]):
         perm_raster: permutation in raster order (perm[src] = dst)
 
     Returns:
-        (circuit, qubit_list) where qubits are in snake order.
+        FPResult with circuit, sys_qubits (raster order), anc_qubits=[],
+        gamma_method=None, and L.
     """
     N = L * L
     validate_permutation(list(perm_raster), N)
@@ -48,7 +53,15 @@ def build_fp_1d(L: int, perm_raster: Sequence[int]):
     ops = fswap_odd_even_sort_ops(qubits, perm_snake)
 
     circuit = cirq.Circuit(ops)
-    return circuit, qubits
+    # sys_qubits in raster order (same GridQubit objects, different list order)
+    sys_list = [cirq.GridQubit(r, c) for r in range(L) for c in range(L)]
+    return FPResult(
+        circuit=circuit,
+        sys_qubits=sys_list,
+        anc_qubits=[],
+        gamma_method=None,
+        L=L,
+    )
 
 
 # ---------------------------------------------------------------------------

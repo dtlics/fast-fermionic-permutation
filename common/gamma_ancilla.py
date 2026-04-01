@@ -67,14 +67,23 @@ def build_stage_D_ops(
     return ops
 
 
-def build_gamma_with_ancillas(L: int):
+def build_gamma_with_ancillas(L: int, sq=None, aq=None):
     """Build Gamma with ancillas (Baseline 2).
+
+    Args:
+        L: grid side length
+        sq: optional system qubit dict {(r,c): Qid}.  Created internally if None.
+        aq: optional ancilla qubit dict {r: Qid}.  Created internally if None.
+            Ancillas must be initialised to |0> before the circuit runs;
+            the circuit guarantees they return to |0> afterwards.
 
     Returns:
         (circuit, sys_list, anc_list) where circuit has CNOT depth 7L-3.
     """
-    sq = make_system_qubits(L)
-    aq = make_ancilla_qubits(L)
+    if sq is None:
+        sq = make_system_qubits(L)
+    if aq is None:
+        aq = make_ancilla_qubits(L)
     ops = []
     ops.extend(column_parity_cascade_ops(sq, L, inverse=False))   # Stage A
     ops.extend(build_stage_B_ops(sq, aq, L))                      # Stage B

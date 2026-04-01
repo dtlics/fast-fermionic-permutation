@@ -189,7 +189,7 @@ def pipeline_skip_only_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
 # Full Pipelined Gamma (Baseline 4)
 # ---------------------------------------------------------------------------
 
-def build_gamma_pipelined(L: int):
+def build_gamma_pipelined(L: int, sq=None):
     """Build the pipelined Gamma circuit (Baseline 4, best construction).
 
     Depth: 8L + 9 (odd L >= 5) or 8L + 10 (even L >= 6), 0 ancillas.
@@ -200,10 +200,15 @@ def build_gamma_pipelined(L: int):
         Phase 3: Column parity cascade inverse           (L-1)
         Phase 4: Original-basis interactions f_D          (~2L + O(1))
 
+    Args:
+        L: grid side length
+        sq: optional system qubit dict {(r,c): Qid}.  Created internally if None.
+
     Returns:
         (circuit, sys_list)
     """
-    sq = make_system_qubits(L)
+    if sq is None:
+        sq = make_system_qubits(L)
     ops = []
 
     # Phase 1

@@ -1,6 +1,6 @@
 """Baseline 3: Ancilla-free Gamma using sequential T(x,y) primitives.
 
-CNOT depth: 9L + 12 (exact for L >= 5)
+CNOT depth: 12L + 8 (exact for L >= 5, phase-separated construction)
 Ancillas: 0
 Gate count: O(N)
 
@@ -97,40 +97,73 @@ def skip_row_T_ops(sq: Dict, r1: int, r2: int, r_mid: int, L: int) -> List[cirq.
 # Full Gamma circuit (Baseline 3)
 # ---------------------------------------------------------------------------
 
-def build_gamma_ancilla_free(L: int):
+def build_gamma_ancilla_free(L: int, sq=None):
     """Build ancilla-free Gamma using sequential primitives (Baseline 3).
 
+    Each phase is built as a separate cirq.Circuit and concatenated with ``+``
+    to prevent cross-phase moment merging.  Within each phase, operations on
+    disjoint qubits (e.g. same-row T on different rows) are still parallelised
+    by cirq's greedy scheduler.
+
+    This gives depth **12L + 8** (exact for L >= 5), matching the theoretical
+    sequential-phase analysis:
+
+        Phase 1  (col parity fwd):    L - 1
+        Phase 2a (f_B same-row T):    2L + 1
+        Phase 2b (f_B skip-row, x2):  2 * (2L + 4)
+        Phase 3  (col parity inv):    L - 1
+        Phase 4a (f_D same-row T):    2L + 1
+        Phase 4b (f_D cross-row T):   2L
+
+    Args:
+        L: grid side length
+        sq: optional system qubit dict {(r,c): Qid}.  Created internally if None.
+
     Returns:
-        (circuit, sys_list) where circuit has CNOT depth 9L+12 (exact for L >= 5).
+        (circuit, sys_list)
     """
-    sq = make_system_qubits(L)
-    ops = []
+    if sq is None:
+        sq = make_system_qubits(L)
 
     # Phase 1: column parity cascade forward
-    ops.extend(column_parity_cascade_ops(sq, L, inverse=False))
+    phase1_ops = list(column_parity_cascade_ops(sq, L, inverse=False))
 
     # Phase 2a: f_B same-row terms for even rows r >= 2
+    phase2a_ops = []
     for r in range(2, L, 2):
-        ops.extend(same_row_T_ops(sq, r, L))
+        phase2a_ops.extend(same_row_T_ops(sq, r, L))
 
-    # Phase 2b: f_B skip-row terms (2-round scheduling)
+    # Phase 2b: f_B skip-row terms (2 batches to avoid row overlap)
     skip_rows = [r for r in range(0, L, 2) if r + 2 <= L - 1]
+    phase2b1_ops = []
     for r in skip_rows[0::2]:
-        ops.extend(skip_row_T_ops(sq, r, r + 2, r + 1, L))
+        phase2b1_ops.extend(skip_row_T_ops(sq, r, r + 2, r + 1, L))
+    phase2b2_ops = []
     for r in skip_rows[1::2]:
-        ops.extend(skip_row_T_ops(sq, r, r + 2, r + 1, L))
+        phase2b2_ops.extend(skip_row_T_ops(sq, r, r + 2, r + 1, L))
 
     # Phase 3: column parity cascade inverse
-    ops.extend(column_parity_cascade_ops(sq, L, inverse=True))
+    phase3_ops = list(column_parity_cascade_ops(sq, L, inverse=True))
 
     # Phase 4a: f_D same-row terms for all even rows
+    phase4a_ops = []
     for r in range(0, L, 2):
-        ops.extend(same_row_T_ops(sq, r, L))
+        phase4a_ops.extend(same_row_T_ops(sq, r, L))
 
     # Phase 4b: f_D cross-row terms for right-closed pairs
+    phase4b_ops = []
     for r in range(0, L - 1, 2):
-        ops.extend(cross_row_adjacent_T_ops(sq, r, r + 1, L))
+        phase4b_ops.extend(cross_row_adjacent_T_ops(sq, r, r + 1, L))
 
-    circuit = cirq.Circuit(ops)
+    # Concatenate phases -- '+' preserves moment boundaries across phases
+    circuit = (
+        cirq.Circuit(phase1_ops)
+        + cirq.Circuit(phase2a_ops)
+        + cirq.Circuit(phase2b1_ops)
+        + cirq.Circuit(phase2b2_ops)
+        + cirq.Circuit(phase3_ops)
+        + cirq.Circuit(phase4a_ops)
+        + cirq.Circuit(phase4b_ops)
+    )
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
     return circuit, sys_list

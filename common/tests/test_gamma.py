@@ -82,9 +82,13 @@ def test_gamma_ancilla_depth(L):
 
 @pytest.mark.parametrize("L", [5, 7, 9, 11, 15])
 def test_gamma_primitive_depth(L):
-    """Verify ancilla-free primitive Gamma depth = 9L + 12 (exact for L >= 5)."""
+    """Verify ancilla-free primitive Gamma depth = 12L + 8 (exact for L >= 5).
+
+    Phase-separated construction prevents cross-phase moment merging,
+    giving the theoretical sequential-phase depth.
+    """
     circ, _ = build_gamma_ancilla_free(L)
-    expected = 9 * L + 12
+    expected = 12 * L + 8
     assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
 
 
