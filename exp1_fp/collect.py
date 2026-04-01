@@ -101,7 +101,7 @@ def run_experiment(
     L_values: Sequence[int] = (4, 6, 8, 10, 12, 14, 16),
     perm_kinds: Sequence[str] = ("reverse", "transpose", "random"),
     n_random: int = 20,
-    p_values: Sequence[float] = (1e-2, 1e-3, 1e-4),
+    p_values: Sequence[float] = (1e-3, 1e-4, 1e-5),
     p_idle_factor: float = 0.1,
     shots: int = 1000,
     output_dir: str = "exp1_fp/results",
