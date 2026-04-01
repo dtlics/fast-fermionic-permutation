@@ -6,10 +6,11 @@ Two metrics (both ignore single-qubit gate layers):
    - total_qubits = data + ancilla (all qubits in the circuit)
    - two_q_gate_depth = number of moments with at least one 2-qubit gate
 
-2. **Counting + union bound fidelity**:
+2. **Counting + union bound error bound**:
    - At each 2-qubit-gate moment, count both 2-qubit gates AND idle qubits
    - idle = total_qubits - 2 * (number of 2q ops in that moment)
-   - F_est = (1 - p_2q)^G * (1 - p_idle)^I
+   - Union bound: P(fail) <= G * p_2q + I * p_idle
+   - F_est >= 1 - (G * p_2q + I * p_idle)
    - where G = total 2q gates, I = total idle-qubit-moments
 """
 
@@ -111,9 +112,10 @@ def counting_union_bound_fidelity(
     p_2q: float = 1e-3,
     p_idle: float = 1e-5,
 ) -> float:
-    """Fidelity estimate via counting + union bound.
+    """Lower bound on fidelity via counting + union bound.
 
-    F_est = (1 - p_2q)^G * (1 - p_idle)^I
+    P(fail) <= G * p_2q + I * p_idle       (union bound)
+    F_est  >= 1 - (G * p_2q + I * p_idle)  (complementary)
 
     Args:
         total_2q_gates: G -- total two-qubit gate applications
@@ -122,9 +124,10 @@ def counting_union_bound_fidelity(
         p_idle: error rate per idle qubit per time step
 
     Returns:
-        estimated circuit fidelity (float in [0, 1])
+        fidelity lower bound (may be negative for very noisy circuits;
+        clamp to 0 if needed)
     """
-    return (1.0 - p_2q) ** total_2q_gates * (1.0 - p_idle) ** total_idle_slots
+    return 1.0 - (total_2q_gates * p_2q + total_idle_slots * p_idle)
 
 
 # ---------------------------------------------------------------------------

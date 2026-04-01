@@ -282,9 +282,9 @@ def test_spacetime_volume_formula():
 
 
 def test_fidelity_formula():
-    """Fidelity = (1-p_2q)^G * (1-p_idle)^I."""
+    """Fidelity >= 1 - (G*p_2q + I*p_idle) via union bound."""
     f = counting_union_bound_fidelity(100, 200, p_2q=0.001, p_idle=0.0001)
-    expected = (1 - 0.001) ** 100 * (1 - 0.0001) ** 200
+    expected = 1.0 - (100 * 0.001 + 200 * 0.0001)
     assert abs(f - expected) < 1e-12
 
 
