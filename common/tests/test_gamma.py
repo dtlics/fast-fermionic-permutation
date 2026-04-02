@@ -14,6 +14,7 @@ from common.grid import make_system_qubits, sites_between, snake_to_rc
 from common.gamma_ancilla import build_gamma_with_ancillas
 from common.gamma_primitive import build_gamma_ancilla_free
 from common.gamma_pipeline import build_gamma_pipelined
+from common.stim_convert import CNotPowGate, CZPowGate, ZPowGate
 
 
 # ---------------------------------------------------------------------------
@@ -28,15 +29,15 @@ def classical_sim_phase(ops_list, qubit_to_idx, n_qubits, basis_state_bits):
     for op in ops_list:
         gate = op.gate
         qubits = op.wires
-        if isinstance(gate, qp.ops.common_gates.CNotPowGate) and gate.exponent == 1:
+        if isinstance(gate, CNotPowGate) and gate.exponent == 1:
             ctrl_idx = qubit_to_idx[qubits[0]]
             tgt_idx = qubit_to_idx[qubits[1]]
             bits[tgt_idx] ^= bits[ctrl_idx]
-        elif isinstance(gate, qp.ops.common_gates.CZPowGate) and gate.exponent == 1:
+        elif isinstance(gate, CZPowGate) and gate.exponent == 1:
             a_idx = qubit_to_idx[qubits[0]]
             b_idx = qubit_to_idx[qubits[1]]
             phase ^= (bits[a_idx] & bits[b_idx])
-        elif isinstance(gate, qp.ops.common_gates.ZPowGate) and gate.exponent == 1:
+        elif isinstance(gate, ZPowGate) and gate.exponent == 1:
             idx = qubit_to_idx[qubits[0]]
             phase ^= bits[idx]
         else:
@@ -49,7 +50,7 @@ def get_phase_ancilla_free(circuit, qubit_order, basis_state_int):
     n = len(qubit_order)
     q2i = {q: i for i, q in enumerate(qubit_order)}
     bits = [(basis_state_int >> (n - 1 - i)) & 1 for i in range(n)]
-    all_ops = [op for moment in circuit for op in moment]
+    all_ops = circuit
     phase, _ = classical_sim_phase(all_ops, q2i, n, bits)
     return phase
 
@@ -61,7 +62,7 @@ def get_phase_with_ancillas(circuit, sys_qubits, anc_qubits, basis_state_int):
     all_qubits = sys_qubits + anc_qubits
     q2i = {q: i for i, q in enumerate(all_qubits)}
     bits = [(basis_state_int >> (n_sys - 1 - i)) & 1 for i in range(n_sys)] + [0] * n_anc
-    all_ops = [op for moment in circuit for op in moment]
+    all_ops = circuit
     phase, final_bits = classical_sim_phase(all_ops, q2i, n_sys + n_anc, bits)
     for i in range(n_anc):
         assert final_bits[n_sys + i] == 0, f"Ancilla {i} not disentangled!"
@@ -181,14 +182,14 @@ def test_gamma_is_diagonal(L):
         if name == "ancilla":
             circ, sys_list, anc_list = result
             all_qubits = sys_list + anc_list
-            q2i = {q: i for i, q in enumerate(all_qubits)}
+            q2i = {q.labels[0]: i for i, q in enumerate(all_qubits)}
             n = len(all_qubits)
         else:
             circ, sys_list = result
-            q2i = {q: i for i, q in enumerate(sys_list)}
+            q2i = {q.labels[0]: i for i, q in enumerate(sys_list)}
             n = N
 
-        all_ops = [op for moment in circ for op in moment]
+        all_ops = circ
         for _ in range(200):
             bits_sys = rng.integers(0, 2, size=N).tolist()
             if name == "ancilla":
