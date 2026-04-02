@@ -5,7 +5,7 @@ This module provides tools to visualize the constant-depth fermionic permutation
 on a 2D grid layout, with specific focus on Hybrid Schematic views for classical feedforward phases.
 """
 
-import pennylane as qp
+import cirq
 import numpy as np
 import networkx as nx
 import sympy
@@ -34,16 +34,16 @@ def validate_permutation(permutation: Sequence[int], n: int) -> None:
 # --- Grid Topology ---
 
 class GridTopology:
-    def __init__(self, L: int, data_qubits: Optional[Sequence[str]] = None,
-                 ancilla_qubits: Optional[Sequence[str]] = None):
+    def __init__(self, L: int, data_qubits: Optional[Sequence[cirq.Qid]] = None,
+                 ancilla_qubits: Optional[Sequence[cirq.Qid]] = None):
         self.L = L
-        self.data_map: Dict[tuple, str] = {}
-        self.ancilla_map: Dict[tuple, str] = {}
+        self.data_map: Dict[tuple, cirq.Qid] = {}
+        self.ancilla_map: Dict[tuple, cirq.Qid] = {}
 
         if data_qubits is None:
             for r in range(L):
                 for c in range(L):
-                    self.data_map[(r, c)] = qp.wires.Wires(r, 2 * c)
+                    self.data_map[(r, c)] = cirq.GridQubit(r, 2 * c)
         else:
             if len(data_qubits) != L * L:
                 raise ValueError("data_qubits must have length L*L.")
@@ -56,11 +56,11 @@ class GridTopology:
             if data_qubits is None:
                 for r in range(L):
                     for k in range(L - 1):
-                        self.ancilla_map[(r, k)] = qp.wires.Wires(r, 2 * k + 1)
+                        self.ancilla_map[(r, k)] = cirq.GridQubit(r, 2 * k + 1)
             else:
                 for r in range(L):
                     for k in range(L - 1):
-                        self.ancilla_map[(r, k)] = qp.wires.Wires(f"anc_{r}_{k}")
+                        self.ancilla_map[(r, k)] = cirq.NamedQubit(f"anc_{r}_{k}")
         else:
             if len(ancilla_qubits) != L * (L - 1):
                 raise ValueError("ancilla_qubits must have length L*(L-1).")
@@ -75,13 +75,13 @@ class GridTopology:
         self.ancilla_qubits = [self.ancilla_map[(r, k)] for r in range(L) for k in range(L - 1)]
         self.all_qubits = self.data_qubits + self.ancilla_qubits
 
-    def get_data_row(self, r: int) -> List[str]:
+    def get_data_row(self, r: int) -> List[cirq.Qid]:
         return [self.data_map[(r, c)] for c in range(self.L)]
 
-    def get_ancilla_row(self, r: int) -> List[str]:
+    def get_ancilla_row(self, r: int) -> List[cirq.Qid]:
         return [self.ancilla_map[(r, k)] for k in range(self.L - 1)]
 
-    def get_data_col(self, c: int) -> List[str]:
+    def get_data_col(self, c: int) -> List[cirq.Qid]:
         return [self.data_map[(r, c)] for r in range(self.L)]
 
 # --- Decomposition ---
@@ -154,8 +154,8 @@ def decompose_permutation(L: int, logical_perm: Sequence[int]):
 # --- Circuit Construction ---
 
 class CompressedFermionicPermutation:
-    def __init__(self, L: int, data_qubits: Optional[Sequence[str]] = None,
-                 ancilla_qubits: Optional[Sequence[str]] = None,
+    def __init__(self, L: int, data_qubits: Optional[Sequence[cirq.Qid]] = None,
+                 ancilla_qubits: Optional[Sequence[cirq.Qid]] = None,
                  topology: Optional[GridTopology] = None):
         self.L = L
         self.topo = topology or GridTopology(L, data_qubits=data_qubits, ancilla_qubits=ancilla_qubits)
@@ -175,27 +175,27 @@ class CompressedFermionicPermutation:
     def _unbuild_key(self, t_idx: int, r: int) -> str:
         return f"m_unbuild_t{t_idx}_r{r}"
 
-    def build_prefix_xor_moments(self, round_parity: int, t_idx: int) -> List[qp.Moment]:
+    def build_prefix_xor_moments(self, round_parity: int, t_idx: int) -> List[cirq.Moment]:
         moments = []
-        moments.append(qp.Moment([qp.reset(a) for a in self.topo.ancilla_qubits]))
-        moments.append(qp.Moment([qp.H(a) for a in self.topo.ancilla_qubits]))
+        moments.append(cirq.Moment([cirq.reset(a) for a in self.topo.ancilla_qubits]))
+        moments.append(cirq.Moment([cirq.H(a) for a in self.topo.ancilla_qubits]))
         ops = []
         for r in range(self.L):
             Q, A = self._get_direction(round_parity, r)
             for k in range(self.L - 1):
-                ops.append(qp.CNOT(A[k], Q[k + 1]))
-        moments.append(qp.Moment(ops))
+                ops.append(cirq.CNOT(A[k], Q[k + 1]))
+        moments.append(cirq.Moment(ops))
         ops = []
         for r in range(self.L):
             Q, A = self._get_direction(round_parity, r)
             for k in range(self.L - 1):
-                ops.append(qp.CNOT(Q[k], A[k]))
-        moments.append(qp.Moment(ops))
+                ops.append(cirq.CNOT(Q[k], A[k]))
+        moments.append(cirq.Moment(ops))
         ops = []
         for r in range(self.L):
             row_anc = self.topo.get_ancilla_row(r)
-            ops.append(qp.measure(*row_anc, key=self._build_key(t_idx, r)))
-        moments.append(qp.Moment(ops))
+            ops.append(cirq.measure(*row_anc, key=self._build_key(t_idx, r)))
+        moments.append(cirq.Moment(ops))
         ops = []
         for r in range(self.L):
             Q, A = self._get_direction(round_parity, r)
@@ -208,37 +208,37 @@ class CompressedFermionicPermutation:
                 idx = phys_index[A[k]]
                 term = base[idx]
                 prefix_expr = term if prefix_expr is None else sympy.Xor(prefix_expr, term)
-                cond = qp.SympyCondition(prefix_expr)
-                ops.append(qp.X(Q[k + 1]).with_classical_controls(cond))
+                cond = cirq.SympyCondition(prefix_expr)
+                ops.append(cirq.X(Q[k + 1]).with_classical_controls(cond))
         if ops:
-            moments.append(qp.Moment(ops))
+            moments.append(cirq.Moment(ops))
         return moments
 
-    def unbuild_prefix_xor_moments(self, round_parity: int, t_idx: int) -> List[qp.Moment]:
+    def unbuild_prefix_xor_moments(self, round_parity: int, t_idx: int) -> List[cirq.Moment]:
         moments = []
         ops = []
         for r in range(self.L):
-            ops.extend([qp.reset(a) for a in self.topo.get_ancilla_row(r)])
-        moments.append(qp.Moment(ops))
+            ops.extend([cirq.reset(a) for a in self.topo.get_ancilla_row(r)])
+        moments.append(cirq.Moment(ops))
         ops = []
         for r in range(self.L):
             Q, A = self._get_direction(round_parity, r)
             for k in range(self.L - 1):
-                ops.append(qp.CNOT(Q[k], A[k]))
-        moments.append(qp.Moment(ops))
+                ops.append(cirq.CNOT(Q[k], A[k]))
+        moments.append(cirq.Moment(ops))
         ops = []
         for r in range(self.L):
             Q, A = self._get_direction(round_parity, r)
             for k in range(self.L - 1):
-                ops.append(qp.CNOT(A[k], Q[k + 1]))
-        moments.append(qp.Moment(ops))
-        ops_h = [qp.H(a) for a in self.topo.ancilla_qubits]
+                ops.append(cirq.CNOT(A[k], Q[k + 1]))
+        moments.append(cirq.Moment(ops))
+        ops_h = [cirq.H(a) for a in self.topo.ancilla_qubits]
         ops_m = []
         for r in range(self.L):
             row_anc = self.topo.get_ancilla_row(r)
-            ops_m.append(qp.measure(*row_anc, key=self._unbuild_key(t_idx, r)))
-        moments.append(qp.Moment(ops_h))
-        moments.append(qp.Moment(ops_m))
+            ops_m.append(cirq.measure(*row_anc, key=self._unbuild_key(t_idx, r)))
+        moments.append(cirq.Moment(ops_h))
+        moments.append(cirq.Moment(ops_m))
         ops = []
         for r in range(self.L):
             Q, A = self._get_direction(round_parity, r)
@@ -252,22 +252,22 @@ class CompressedFermionicPermutation:
                 idx = dir_indices[k]
                 term = base[idx]
                 suffix_expr = term if suffix_expr is None else sympy.Xor(suffix_expr, term)
-                cond = qp.SympyCondition(suffix_expr)
-                ops.append(qp.Z(Q[k]).with_classical_controls(cond))
+                cond = cirq.SympyCondition(suffix_expr)
+                ops.append(cirq.Z(Q[k]).with_classical_controls(cond))
         if ops:
-            moments.append(qp.Moment(ops))
+            moments.append(cirq.Moment(ops))
         return moments
 
-    def _pair_key(self, q1: str, q2: str):
+    def _pair_key(self, q1: cirq.Qid, q2: cirq.Qid):
         i1 = self._data_index.get(q1)
         i2 = self._data_index.get(q2)
         if i1 is not None and i2 is not None:
             return (q1, q2) if i1 < i2 else (q2, q1)
         return (q1, q2) if str(q1) < str(q2) else (q2, q1)
 
-    def get_phase_corrections_moments(self, active_swaps, round_parity: int) -> List[qp.Moment]:
+    def get_phase_corrections_moments(self, active_swaps, round_parity: int) -> List[cirq.Moment]:
         cz_counts: Dict[tuple, int] = {}
-        z_counts: Dict[str, int] = {}
+        z_counts: Dict[cirq.Qid, int] = {}
         def add_cz(a, b):
             key = self._pair_key(a, b)
             cz_counts[key] = cz_counts.get(key, 0) + 1
@@ -293,7 +293,7 @@ class CompressedFermionicPermutation:
                     add_z(BR)
                 if TR and BR:
                     add_cz(TR, BR)
-        z_ops = [qp.Z(q) for q, cnt in z_counts.items() if cnt % 2 == 1]
+        z_ops = [cirq.Z(q) for q, cnt in z_counts.items() if cnt % 2 == 1]
         cz_pairs = [pair for pair, cnt in cz_counts.items() if cnt % 2 == 1]
         vertical, horiz_even, horiz_odd, other = [], [], [], []
         for q1, q2 in cz_pairs:
@@ -315,24 +315,24 @@ class CompressedFermionicPermutation:
             else:
                 other.append((q1, q2))
         moments = []
-        if z_ops: moments.append(qp.Moment(z_ops))
-        if vertical: moments.append(qp.Moment([qp.CZ(a, b) for a, b in vertical]))
-        if horiz_even: moments.append(qp.Moment([qp.CZ(a, b) for a, b in horiz_even]))
-        if horiz_odd: moments.append(qp.Moment([qp.CZ(a, b) for a, b in horiz_odd]))
-        if other: moments.extend(list(qp.tape.qscript.QuantumScript([qp.CZ(a, b) for a, b in other]).moments))
+        if z_ops: moments.append(cirq.Moment(z_ops))
+        if vertical: moments.append(cirq.Moment([cirq.CZ(a, b) for a, b in vertical]))
+        if horiz_even: moments.append(cirq.Moment([cirq.CZ(a, b) for a, b in horiz_even]))
+        if horiz_odd: moments.append(cirq.Moment([cirq.CZ(a, b) for a, b in horiz_odd]))
+        if other: moments.extend(list(cirq.Circuit([cirq.CZ(a, b) for a, b in other]).moments))
         return moments
 
-    def get_swaps_moments(self, active_swaps) -> List[qp.Moment]:
+    def get_swaps_moments(self, active_swaps) -> List[cirq.Moment]:
         ops = []
         for c in range(self.L):
             col_qs = self.topo.get_data_col(c)
             for r in active_swaps[c]:
-                ops.append(qp.SWAP(col_qs[r], col_qs[r + 1]))
-        return [qp.Moment(ops)]
+                ops.append(cirq.SWAP(col_qs[r], col_qs[r + 1]))
+        return [cirq.Moment(ops)]
 
 # --- Grouped Circuit Generation ---
 
-def build_grouped_circuit_structure(qubits: Sequence[str], permutation: Sequence[int],
+def build_grouped_circuit_structure(qubits: Sequence[cirq.Qid], permutation: Sequence[int],
                                     **kwargs) -> List[Dict[str, Any]]:
     L = infer_grid_size(len(qubits))
     program = CompressedFermionicPermutation(L, data_qubits=qubits, **kwargs)
@@ -385,7 +385,7 @@ def build_grouped_circuit_structure(qubits: Sequence[str], permutation: Sequence
     m_row = []
     for r in range(L):
         row_qs = program.topo.get_data_row(r)
-        m_row.append(qp.Moment([qp.I(row_qs[0]).with_tags(f"Row {r}")]))
+        m_row.append(cirq.Moment([cirq.I(row_qs[0]).with_tags(f"Row {r}")]))
     append_group("RowStage", m_row)
     process_col_stage("ColStage2", s3)
     return groups
@@ -417,8 +417,8 @@ class GridVisualizer:
                                      linewidth=1, edgecolor='black', facecolor=color, zorder=1)
             ax.add_patch(rect)
 
-    def _extract_control_sources(self, op: qp.ops.Operation) -> List[Tuple[float, float]]:
-        if not isinstance(op, qp.ClassicallyControlledOperation):
+    def _extract_control_sources(self, op: cirq.Operation) -> List[Tuple[float, float]]:
+        if not isinstance(op, cirq.ClassicallyControlledOperation):
             return []
         sources = []
         conditions = op.classical_controls
@@ -449,14 +449,14 @@ class GridVisualizer:
 
             real_op = op
             is_controlled = False
-            while isinstance(real_op, (qp.ClassicallyControlledOperation, qp.TaggedOperation)):
-                 if isinstance(real_op, qp.ClassicallyControlledOperation):
+            while isinstance(real_op, (cirq.ClassicallyControlledOperation, cirq.TaggedOperation)):
+                 if isinstance(real_op, cirq.ClassicallyControlledOperation):
                      is_controlled = True
                      real_op = real_op.without_classical_controls()
                  else:
                      real_op = real_op.sub_operation
 
-            qubits = real_op.wires
+            qubits = real_op.qubits
             gate = real_op.gate
             
             pts = [self.q_coords.get(q) for q in qubits if q in self.q_coords]
@@ -468,12 +468,12 @@ class GridVisualizer:
             font_weight = 'bold'
             if gate is None: continue
             
-            if isinstance(gate, qp.MeasurementGate): label = "M"
-            elif isinstance(gate, qp.ResetChannel): label = "|0>"; font_weight = 'normal'
-            elif isinstance(gate, qp.HPowGate) and gate.exponent == 1.0: label = "H"
-            elif isinstance(gate, qp.XPowGate) and gate.exponent == 1.0: label = "X"
-            elif isinstance(gate, qp.ZPowGate) and gate.exponent == 1.0: label = "Z"
-            elif isinstance(gate, (qp.CNotPowGate, qp.CZPowGate, qp.SwapPowGate)): pass
+            if isinstance(gate, cirq.MeasurementGate): label = "M"
+            elif isinstance(gate, cirq.ResetChannel): label = "|0>"; font_weight = 'normal'
+            elif isinstance(gate, cirq.HPowGate) and gate.exponent == 1.0: label = "H"
+            elif isinstance(gate, cirq.XPowGate) and gate.exponent == 1.0: label = "X"
+            elif isinstance(gate, cirq.ZPowGate) and gate.exponent == 1.0: label = "Z"
+            elif isinstance(gate, (cirq.CNotPowGate, cirq.CZPowGate, cirq.SwapPowGate)): pass
             else: label = str(gate)[:2]
 
             if control_sources:
@@ -486,16 +486,16 @@ class GridVisualizer:
                 x1, y1 = xs[0], ys[0]; x2, y2 = xs[1], ys[1]
                 style = '-' if not is_controlled else '--'
                 ax.plot([x1, x2], [y1, y2], color='black', linewidth=2, linestyle=style, zorder=2)
-                if isinstance(gate, qp.CNotPowGate):
+                if isinstance(gate, cirq.CNotPowGate):
                     ax.add_patch(patches.Circle((x1, y1), 0.15, color='black', zorder=3))
                     ax.add_patch(patches.Circle((x2, y2), 0.15, facecolor='white', edgecolor='black', zorder=3))
                     ax.text(x2, y2, '+', ha='center', va='center', fontsize=10, fontweight='bold', zorder=4)
-                elif isinstance(gate, qp.CZPowGate):
+                elif isinstance(gate, cirq.CZPowGate):
                     for tx, ty in zip(xs, ys): ax.add_patch(patches.Circle((tx, ty), 0.15, color='black', zorder=3))
-                elif isinstance(gate, qp.SwapPowGate):
+                elif isinstance(gate, cirq.SwapPowGate):
                     for tx, ty in zip(xs, ys): ax.text(tx, ty, 'x', ha='center', va='center', fontsize=10, fontweight='bold', zorder=4)
             
-            if isinstance(gate, (qp.MeasurementGate, qp.ResetChannel, qp.HPowGate, qp.XPowGate, qp.ZPowGate)):
+            if isinstance(gate, (cirq.MeasurementGate, cirq.ResetChannel, cirq.HPowGate, cirq.XPowGate, cirq.ZPowGate)):
                 for tx, ty in zip(xs, ys):
                     final_label = label
                     if is_controlled and not control_sources: final_label = "C-" + label
@@ -520,22 +520,22 @@ class GridVisualizer:
             for op in moment:
                 real_op = op
                 is_controlled = False
-                while isinstance(real_op, (qp.ClassicallyControlledOperation, qp.TaggedOperation)):
-                     if isinstance(real_op, qp.ClassicallyControlledOperation):
+                while isinstance(real_op, (cirq.ClassicallyControlledOperation, cirq.TaggedOperation)):
+                     if isinstance(real_op, cirq.ClassicallyControlledOperation):
                          is_controlled = True
                          real_op = real_op.without_classical_controls()
                      else:
                          real_op = real_op.sub_operation
                 
                 gate = real_op.gate
-                qubits = real_op.wires
+                qubits = real_op.qubits
                 
-                if isinstance(gate, qp.MeasurementGate):
+                if isinstance(gate, cirq.MeasurementGate):
                     for q in qubits: measurements.append(q)
                 
                 if is_controlled:
                     q = qubits[0]
-                    g_name = "X" if isinstance(gate, qp.XPowGate) else "Z"
+                    g_name = "X" if isinstance(gate, cirq.XPowGate) else "Z"
                     corrections.append((q, g_name))
 
         # 2. Draw per row
@@ -647,14 +647,14 @@ class GridVisualizer:
             for op in m:
                 real_op = op
                 is_controlled = False
-                while isinstance(real_op, (qp.ClassicallyControlledOperation, qp.TaggedOperation)):
-                     if isinstance(real_op, qp.ClassicallyControlledOperation): 
+                while isinstance(real_op, (cirq.ClassicallyControlledOperation, cirq.TaggedOperation)):
+                     if isinstance(real_op, cirq.ClassicallyControlledOperation): 
                         is_controlled = True
                         real_op = real_op.without_classical_controls()
                      else: real_op = real_op.sub_operation
                 
                 gate = real_op.gate
-                if isinstance(gate, qp.MeasurementGate) or is_controlled:
+                if isinstance(gate, cirq.MeasurementGate) or is_controlled:
                     is_schematic = True
                     break
             
@@ -683,14 +683,14 @@ class GridVisualizer:
             if ops:
                 first_op = ops[0]
                 real_op = first_op
-                while isinstance(real_op, (qp.ClassicallyControlledOperation, qp.TaggedOperation)):
-                     if isinstance(real_op, qp.ClassicallyControlledOperation): real_op = real_op.without_classical_controls()
+                while isinstance(real_op, (cirq.ClassicallyControlledOperation, cirq.TaggedOperation)):
+                     if isinstance(real_op, cirq.ClassicallyControlledOperation): real_op = real_op.without_classical_controls()
                      else: real_op = real_op.sub_operation
                 gate = real_op.gate
                 if gate:
                     step_title = gate.__class__.__name__.replace("PowGate", "").replace("Gate", "")
-                    if isinstance(gate, qp.MeasurementGate): step_title = "Measure"
-                    if isinstance(gate, qp.ResetChannel): step_title = "Reset"
+                    if isinstance(gate, cirq.MeasurementGate): step_title = "Measure"
+                    if isinstance(gate, cirq.ResetChannel): step_title = "Reset"
             
             self._draw_on_axis(ax, moment, f"Step {idx+1}: {step_title}")
             
@@ -721,14 +721,14 @@ class GridVisualizer:
             if ops:
                 first_op = ops[0]
                 real_op = first_op
-                while isinstance(real_op, (qp.ClassicallyControlledOperation, qp.TaggedOperation)):
-                     if isinstance(real_op, qp.ClassicallyControlledOperation): real_op = real_op.without_classical_controls()
+                while isinstance(real_op, (cirq.ClassicallyControlledOperation, cirq.TaggedOperation)):
+                     if isinstance(real_op, cirq.ClassicallyControlledOperation): real_op = real_op.without_classical_controls()
                      else: real_op = real_op.sub_operation
                 gate = real_op.gate
                 if gate:
                     step_title = gate.__class__.__name__.replace("PowGate", "").replace("Gate", "")
-                    if isinstance(gate, qp.MeasurementGate): step_title = "Measure"
-                    if isinstance(gate, qp.ResetChannel): step_title = "Reset"
+                    if isinstance(gate, cirq.MeasurementGate): step_title = "Measure"
+                    if isinstance(gate, cirq.ResetChannel): step_title = "Reset"
             self._draw_on_axis(ax, moment, f"Step {i+1}: {step_title}")
 
         plt.savefig(save_path, bbox_inches='tight')
@@ -751,7 +751,7 @@ def visualize_permutation(L: int, permutation: Sequence[int], output_dir: str):
     validate_permutation(permutation, L*L)
     
     # 1. Setup Grid & Circuit
-    data_qubits = [qp.wires.Wires(r, 2 * c) for r in range(L) for c in range(L)]
+    data_qubits = [cirq.GridQubit(r, 2 * c) for r in range(L) for c in range(L)]
     program = CompressedFermionicPermutation(L, data_qubits=data_qubits)
     
     # 2. Build Groups
