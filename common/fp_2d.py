@@ -43,8 +43,8 @@ class FPResult(NamedTuple):
         L: grid side length (N = L^2 data qubits)
     """
     circuit: qp.tape.qscript.QuantumScript
-    sys_qubits: List[str]
-    anc_qubits: List[str]
+    sys_qubits: List[qp.wires.Wires]
+    anc_qubits: List[qp.wires.Wires]
     gamma_method: Optional[str]
     L: int
 
@@ -103,13 +103,12 @@ def build_fp_2d(
         raise ValueError(f"Unknown gamma method: {gamma_method}")
 
     # Assemble: RowA + Gamma + Col + Gamma + RowB
-    # TODO: use barriers here and converter?
-    circuit = (
-        qp.tape.qscript.QuantumScript(rowA_ops)
-        + gamma_circ
-        + qp.tape.qscript.QuantumScript(col_ops)
-        + gamma_circ
-        + qp.tape.qscript.QuantumScript(rowB_ops)
+    circuit = qp.tape.qscript.QuantumScript(
+        rowA_ops
+        + gamma_circ.operations
+        + col_ops
+        + gamma_circ.operations
+        + rowB_ops
     )
 
     return FPResult(

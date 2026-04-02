@@ -41,7 +41,7 @@ def same_row_T_prefix_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     ops = []
     ops.extend(prefix_cascade_ops(sq, r, L))
     for c in range(L - 1):
-        ops.append(qp.CZ(sq[(r, c)], sq[(r, c + 1)]))
+        ops.append(qp.CZ(sq[(r, c)] + sq[(r, c + 1)]))
     ops.extend(undo_prefix_cascade_ops(sq, r, L))
     for p in range(L - 1):
         if (L - 1 - p) % 2 == 1:
@@ -64,20 +64,20 @@ def pipeline_same_cross_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     max_fwd = L - 2 + 4
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)] + sq[(r, tau + 1)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r, c)] + sq[(r2, c)]))
         c_lo, c_hi = tau - 4, tau - 3
         if 0 <= c_lo and c_hi < L:
-            ops.append(qp.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
+            ops.append(qp.CZ(sq[(r, c_lo)] + sq[(r, c_hi)]))
     max_undo_extra = 3
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)] + sq[(r, tau + 1)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r, c)] + sq[(r2, c)]))
         c = tau + 3
         if 0 <= c < L and (L - 1 - c) % 2 == 1:
             ops.append(qp.Z(sq[(r, c)]))
@@ -99,38 +99,38 @@ def pipeline_same_skip_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     max_fwd = L - 2 + 6
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)] + sq[(r, tau + 1)]))
         c = tau - 1
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
         c = tau - 3
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau - 4
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
         c_lo, c_hi = tau - 6, tau - 5
         if 0 <= c_lo and c_hi < L:
-            ops.append(qp.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
+            ops.append(qp.CZ(sq[(r, c_lo)] + sq[(r, c_hi)]))
     max_undo_extra = 5
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)] + sq[(r, tau + 1)]))
         c = tau + 1
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
         c = tau + 3
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau + 4
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
         c = tau + 5
         if 0 <= c < L and (L - 1 - c) % 2 == 1:
             ops.append(qp.Z(sq[(r, c)]))
@@ -153,35 +153,35 @@ def pipeline_skip_only_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     max_fwd = L - 1 + 4
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)] + sq[(r, tau + 1)]))
         c = tau - 1
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
         c = tau - 3
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau - 4
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
     max_undo_extra = 4
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)] + sq[(r, tau + 1)]))
         c = tau + 1
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
         c = tau + 3
         if 0 <= c < L:
-            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
         c = tau + 4
         if 0 <= c < L:
-            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)] + sq[(r_mid, c)]))
     return ops
 
 

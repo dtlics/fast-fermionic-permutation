@@ -30,11 +30,11 @@ def build_stage_B_ops(
     for p in range(L - 1, -1, -1):
         for r in range(0, L, 2):
             if r + 2 <= L - 1:
-                ops.append(qp.CZ(sq[(r, p)], aq[r + 2]))
+                ops.append(qp.CZ(sq[(r, p)] + aq[r + 2]))
             if r >= 2:
-                ops.append(qp.CZ(sq[(r, p)], aq[r]))
+                ops.append(qp.CZ(sq[(r, p)] + aq[r]))
         for r in range(L):
-            ops.append(qp.CNOT(sq[(r, p)], aq[r]))
+            ops.append(qp.CNOT(sq[(r, p)] + aq[r]))
     return ops
 
 
@@ -43,9 +43,9 @@ def ancilla_column_cascade_ops(
 ) -> List[qp.ops.Operation]:
     """CNOT cascade on ancilla column. Depth L-1."""
     if not inverse:
-        return [qp.CNOT(aq[r + 1], aq[r]) for r in range(L - 2, -1, -1)]
+        return [qp.CNOT(aq[r + 1] + aq[r]) for r in range(L - 2, -1, -1)]
     else:
-        return [qp.CNOT(aq[r + 1], aq[r]) for r in range(L - 1)]
+        return [qp.CNOT(aq[r + 1] + aq[r]) for r in range(L - 1)]
 
 
 def build_stage_D_ops(
@@ -57,13 +57,13 @@ def build_stage_D_ops(
     ops = []
     for p in range(L):
         for r in range(L):
-            ops.append(qp.CNOT(sq[(r, p)], aq[r]))
+            ops.append(qp.CNOT(sq[(r, p)] + aq[r]))
         for r in range(0, L, 2):
             if r + 1 < L:
-                ops.append(qp.CZ(sq[(r, p)], aq[r]))
-                ops.append(qp.CZ(sq[(r, p)], aq[r + 1]))
+                ops.append(qp.CZ(sq[(r, p)] + aq[r]))
+                ops.append(qp.CZ(sq[(r, p)] + aq[r + 1]))
             else:
-                ops.append(qp.CZ(sq[(r, p)], aq[r]))
+                ops.append(qp.CZ(sq[(r, p)] + aq[r]))
     return ops
 
 

@@ -55,7 +55,7 @@ def build_fp_1d(L: int, perm_raster: Sequence[int]) -> FPResult:
 
     circuit = qp.tape.qscript.QuantumScript(ops)
     # sys_qubits in raster order (same GridQubit objects, different list order)
-    sys_list = [qp.wires.Wires(r, c) for r in range(L) for c in range(L)]
+    sys_list = [qp.wires.Wires([f"({r}, {c})"]) for r in range(L) for c in range(L)]
     return FPResult(
         circuit=circuit,
         sys_qubits=sys_list,

@@ -27,7 +27,7 @@ def classical_sim_phase(ops_list, qubit_to_idx, n_qubits, basis_state_bits):
     phase = 0
     for op in ops_list:
         gate = op.gate
-        qubits = op.qubits
+        qubits = op.wires
         if isinstance(gate, qp.ops.common_gates.CNotPowGate) and gate.exponent == 1:
             ctrl_idx = qubit_to_idx[qubits[0]]
             tgt_idx = qubit_to_idx[qubits[1]]

@@ -456,7 +456,7 @@ class GridVisualizer:
                  else:
                      real_op = real_op.sub_operation
 
-            qubits = real_op.qubits
+            qubits = real_op.wires
             gate = real_op.gate
             
             pts = [self.q_coords.get(q) for q in qubits if q in self.q_coords]
@@ -528,7 +528,7 @@ class GridVisualizer:
                          real_op = real_op.sub_operation
                 
                 gate = real_op.gate
-                qubits = real_op.qubits
+                qubits = real_op.wires
                 
                 if isinstance(gate, qp.MeasurementGate):
                     for q in qubits: measurements.append(q)

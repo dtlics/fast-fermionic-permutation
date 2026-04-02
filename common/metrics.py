@@ -53,18 +53,16 @@ def count_resources(circuit: qp.tape.qscript.QuantumScript, L: int, n_ancillas: 
     total_cnots = 0
     total_idle_slots = 0
 
-    # TODO: use the converter to moments here!
-    for moment in circuit:
+    for op in circuit:
         n_2q_in_moment = 0
         has_fswap = False
-        for op in moment:
-            if len(op.qubits) >= 2:
-                n_2q_in_moment += 1
-                if is_fswap(op.gate):
-                    total_cnots += FSWAP_CNOT_COST
-                    has_fswap = True
-                else:
-                    total_cnots += 1
+        if len(op.wires) >= 2:
+            n_2q_in_moment += 1
+            if is_fswap(op):
+                total_cnots += FSWAP_CNOT_COST
+                has_fswap = True
+            else:
+                total_cnots += 1
 
         if n_2q_in_moment > 0:
             two_q_depth += 1

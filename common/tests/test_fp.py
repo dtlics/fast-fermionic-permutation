@@ -37,7 +37,7 @@ def test_fswap_oet_sort():
             ops = fswap_odd_even_sort_ops(list(qubits), perm)
             check = list(perm)
             for op in ops:
-                q0, q1 = op.qubits
+                q0, q1 = op.wires
                 i, j = list(qubits).index(q0), list(qubits).index(q1)
                 assert abs(i - j) == 1
                 check[i], check[j] = check[j], check[i]

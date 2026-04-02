@@ -22,6 +22,8 @@ import pennylane as qp
 import numpy as np
 import stim
 
+from common.oet_sort import FSWAP
+
 
 class CNotPowGate(qp.operation.Operator):
     num_wires = 2
@@ -100,10 +102,13 @@ class FSwapPowGate(qp.operation.Operator):
 
 
 # Cache type objects for fast comparison
-_CNOT_TYPE = CNotPowGate
+_CNOT_POW_TYPE = CNotPowGate
+_CNOT_TYPE = qp.CNOT
 _Z_TYPE = ZPowGate
-_CZ_TYPE = CZPowGate
-_FSWAP_TYPE = FSwapPowGate
+_CZ_POW_TYPE = CZPowGate
+_CZ_TYPE = qp.CZ
+_FSWAP_POW_TYPE = FSwapPowGate
+_FSWAP_TYPE = FSWAP
 
 
 def qp_to_stim_circuit(
@@ -116,7 +121,7 @@ def qp_to_stim_circuit(
 
     Builds the circuit as a string for fast parsing.
     """
-    qmap = {q: i for i, q in enumerate(qubit_order)}
+    qmap = {q.labels[0]: i for i, q in enumerate(qubit_order)}
     n_qubits = len(qubit_order)
     all_indices = set(range(n_qubits))
     add_2q_noise = p_2q is not None and p_2q > 0
@@ -124,9 +129,7 @@ def qp_to_stim_circuit(
 
     lines = []
 
-    # TODO: refactor to work with QScripts, maybe barriers?
-    # TODO: Maybe add a function that maps a QScript with barriers to a bunch of "moments"?
-    for moment in circuit:
+    for op in circuit:
         swap_t = []
         cz_t = []
         cx_t = []
@@ -135,34 +138,33 @@ def qp_to_stim_circuit(
         active = set()
         has_2q = False
 
-        for op in moment:
-            gate = op.gate
-            qubits = op.qubits
-            nq = len(qubits)
+        gate = op
+        qubits = op.wires
+        nq = len(qubits)
 
-            if nq == 2:
-                i0 = qmap[qubits[0]]
-                i1 = qmap[qubits[1]]
-                has_2q = True
-                active.add(i0)
-                active.add(i1)
-                noise_t.extend((i0, i1))
+        if nq == 2:
+            i0 = qmap[qubits[0]]
+            i1 = qmap[qubits[1]]
+            has_2q = True
+            active.add(i0)
+            active.add(i1)
+            noise_t.extend((i0, i1))
 
-                gt = type(gate)
-                if gt is _FSWAP_TYPE:
-                    swap_t.extend((i0, i1))
-                    cz_t.extend((i0, i1))
-                elif gt is _CNOT_TYPE:
-                    cx_t.extend((i0, i1))
-                elif gt is _CZ_TYPE:
-                    cz_t.extend((i0, i1))
-                else:
-                    raise ValueError(f"Unsupported 2-qubit gate: {gate}")
+            gt = type(gate)
+            if gt is _FSWAP_TYPE or gt is _FSWAP_POW_TYPE:
+                swap_t.extend((i0, i1))
+                cz_t.extend((i0, i1))
+            elif gt is _CNOT_POW_TYPE or gt is _CNOT_TYPE:
+                cx_t.extend((i0, i1))
+            elif gt is _CZ_POW_TYPE or gt is _CZ_TYPE:
+                cz_t.extend((i0, i1))
+            else:
+                raise ValueError(f"Unsupported 2-qubit gate: {gate}")
 
-            elif nq == 1:
-                i0 = qmap[qubits[0]]
-                if type(gate) is _Z_TYPE and abs(gate.exponent) == 1:
-                    z_t.append(i0)
+        elif nq == 1:
+            i0 = qmap[qubits[0]]
+            if type(gate) is _Z_TYPE and abs(gate.exponent) == 1:
+                z_t.append(i0)
 
         if swap_t:
             lines.append("SWAP " + " ".join(map(str, swap_t)))
@@ -199,7 +201,7 @@ def simulate_clifford_fidelity(
     """
     noisy_fwd = qp_to_stim_circuit(forward_circuit, qubit_order, p_2q, p_idle)
 
-    inverse_circuit = qp.inverse(forward_circuit)
+    inverse_circuit = qp.tape.qscript.QuantumScript(forward_circuit.operations[::-1])
     noiseless_inv = qp_to_stim_circuit(inverse_circuit, qubit_order)
 
     combined = noisy_fwd + noiseless_inv

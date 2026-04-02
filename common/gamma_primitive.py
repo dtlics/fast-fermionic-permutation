@@ -29,22 +29,22 @@ from common.grid import column_parity_cascade_ops, make_system_qubits
 
 def suffix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Suffix CNOT cascade: right-to-left on row r."""
-    return [qp.CNOT(sq[(r, c + 1)], sq[(r, c)]) for c in range(L - 2, -1, -1)]
+    return [qp.CNOT(sq[(r, c + 1)] + sq[(r, c)]) for c in range(L - 2, -1, -1)]
 
 
 def undo_suffix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Undo suffix cascade: left-to-right on row r."""
-    return [qp.CNOT(sq[(r, c + 1)], sq[(r, c)]) for c in range(L - 1)]
+    return [qp.CNOT(sq[(r, c + 1)] + sq[(r, c)]) for c in range(L - 1)]
 
 
 def prefix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Prefix CNOT cascade: left-to-right on row r."""
-    return [qp.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(1, L)]
+    return [qp.CNOT(sq[(r, c - 1)] + sq[(r, c)]) for c in range(1, L)]
 
 
 def undo_prefix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Undo prefix cascade: right-to-left on row r."""
-    return [qp.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(L - 1, 0, -1)]
+    return [qp.CNOT(sq[(r, c - 1)] + sq[(r, c)]) for c in range(L - 1, 0, -1)]
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ def same_row_T_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     ops = []
     ops.extend(suffix_cascade_ops(sq, r, L))
     for c in range(L - 1):
-        ops.append(qp.CZ(sq[(r, c)], sq[(r, c + 1)]))
+        ops.append(qp.CZ(sq[(r, c)] + sq[(r, c + 1)]))
     ops.extend(undo_suffix_cascade_ops(sq, r, L))
     for c in range(1, L, 2):
         ops.append(qp.Z(sq[(r, c)]))
@@ -68,10 +68,10 @@ def cross_row_adjacent_T_ops(sq: Dict, r1: int, r2: int, L: int) -> List[qp.ops.
     ops = []
     ops.extend(prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(qp.CZ(sq[(r1, c)], sq[(r2, c)]))
+        ops.append(qp.CZ(sq[(r1, c)] + sq[(r2, c)]))
     ops.extend(undo_prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(qp.CZ(sq[(r1, c)], sq[(r2, c)]))
+        ops.append(qp.CZ(sq[(r1, c)] + sq[(r2, c)]))
     return ops
 
 
@@ -80,16 +80,16 @@ def skip_row_T_ops(sq: Dict, r1: int, r2: int, r_mid: int, L: int) -> List[qp.op
     ops = []
     ops.extend(prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
-        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)] + sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)] + sq[(r_mid, c)]))
     ops.extend(undo_prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
-        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)] + sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)] + sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)] + sq[(r_mid, c)]))
     return ops
 
 
@@ -99,21 +99,6 @@ def skip_row_T_ops(sq: Dict, r1: int, r2: int, r_mid: int, L: int) -> List[qp.op
 
 def build_gamma_ancilla_free(L: int, sq=None):
     """Build ancilla-free Gamma using sequential primitives (Baseline 3).
-
-    Each phase is built as a separate qp.tape.qscript.QuantumScript and concatenated with ``+``
-    to prevent cross-phase moment merging.  Within each phase, operations on
-    disjoint qubits (e.g. same-row T on different rows) are still parallelised
-    by qp's greedy scheduler.
-
-    This gives depth **12L + 8** (exact for L >= 5), matching the theoretical
-    sequential-phase analysis:
-
-        Phase 1  (col parity fwd):    L - 1
-        Phase 2a (f_B same-row T):    2L + 1
-        Phase 2b (f_B skip-row, x2):  2 * (2L + 4)
-        Phase 3  (col parity inv):    L - 1
-        Phase 4a (f_D same-row T):    2L + 1
-        Phase 4b (f_D cross-row T):   2L
 
     Args:
         L: grid side length
@@ -156,15 +141,14 @@ def build_gamma_ancilla_free(L: int, sq=None):
         phase4b_ops.extend(cross_row_adjacent_T_ops(sq, r, r + 1, L))
 
     # Concatenate phases -- '+' preserves moment boundaries across phases
-    # TODO: use barriers or something here, and converter?
-    circuit = (
-        qp.tape.qscript.QuantumScript(phase1_ops)
-        + qp.tape.qscript.QuantumScript(phase2a_ops)
-        + qp.tape.qscript.QuantumScript(phase2b1_ops)
-        + qp.tape.qscript.QuantumScript(phase2b2_ops)
-        + qp.tape.qscript.QuantumScript(phase3_ops)
-        + qp.tape.qscript.QuantumScript(phase4a_ops)
-        + qp.tape.qscript.QuantumScript(phase4b_ops)
+    circuit = qp.tape.qscript.QuantumScript(
+        phase1_ops
+        + phase2a_ops
+        + phase2b1_ops
+        + phase2b2_ops
+        + phase3_ops
+        + phase4a_ops
+        + phase4b_ops
     )
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
     return circuit, sys_list

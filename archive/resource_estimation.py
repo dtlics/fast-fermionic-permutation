@@ -363,29 +363,29 @@ def _synthesize_fswap_template_ops() -> Tuple[qp.ops.Operation, ...]:
 
 
 def _lower_fswap_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
-    if len(op.qubits) != 2:
+    if len(op.wires) != 2:
         raise ValueError("FSWAP must act on exactly two qubits.")
-    a, b = op.qubits
+    a, b = op.wires
     q_map = {qp.LineQubit(0): a, qp.LineQubit(1): b}
 
     lowered: List[qp.ops.Operation] = []
     for template_op in _synthesize_fswap_template_ops():
-        mapped = template_op.with_qubits(*(q_map[q] for q in template_op.qubits))
+        mapped = template_op.with_qubits(*(q_map[q] for q in template_op.wires))
         lowered.extend(_lower_operation_to_common(mapped))
     return lowered
 
 
 def _lower_swap_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
-    if len(op.qubits) != 2:
+    if len(op.wires) != 2:
         raise ValueError("SWAP must act on exactly two qubits.")
-    a, b = op.qubits
+    a, b = op.wires
     return [qp.CNOT(a, b), qp.CNOT(b, a), qp.CNOT(a, b)]
 
 
 def _lower_cz_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
-    if len(op.qubits) != 2:
+    if len(op.wires) != 2:
         raise ValueError("CZ must act on exactly two qubits.")
-    control, target = op.qubits
+    control, target = op.wires
     return [qp.H(target), qp.CNOT(control, target), qp.H(target)]
 
 
@@ -531,7 +531,7 @@ def count_common_gates(circuit: qp.tape.qscript.QuantumScript) -> Dict[str, int]
         if gate is None:
             continue
 
-        n_qubits = len(op.qubits)
+        n_qubits = len(op.wires)
 
         if isinstance(gate, qp.MeasurementGate):
             counts["MEASURE"] += n_qubits

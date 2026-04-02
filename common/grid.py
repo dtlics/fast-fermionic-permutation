@@ -64,7 +64,7 @@ def sites_between(r1: int, c: int, r2: int, L: int) -> List[int]:
 
 def make_system_qubits(L: int) -> Dict[Tuple[int, int], qp.wires.Wires]:
     """Create L x L grid of system qubits."""
-    return {(r, c): qp.wires.Wires([f"{r}{c}"]) for r in range(L) for c in range(L)}
+    return {(r, c): qp.wires.Wires([f"({r}, {c})"]) for r in range(L) for c in range(L)}
 
 
 def make_ancilla_qubits(L: int) -> Dict[int, qp.wires.Wires]:
@@ -124,9 +124,9 @@ def column_parity_cascade_ops(
     if not inverse:
         for r in range(L - 2, -1, -1):
             for c in range(L):
-                ops.append(qp.CNOT(sq[(r + 1, c)], sq[(r, c)]))
+                ops.append(qp.CNOT(sq[(r + 1, c)] + sq[(r, c)]))
     else:
         for r in range(L - 1):
             for c in range(L):
-                ops.append(qp.CNOT(sq[(r + 1, c)], sq[(r, c)]))
+                ops.append(qp.CNOT(sq[(r + 1, c)] + sq[(r, c)]))
     return ops
