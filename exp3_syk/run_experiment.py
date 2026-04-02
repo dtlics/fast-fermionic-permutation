@@ -10,10 +10,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 
 import pandas as pd
 
-from exp3_syk.collect import run_experiment
+from exp3_syk.collect import run_experiment, collect_colors_data, COLORS_K_VALUES
 from exp3_syk.plot import generate_all_plots
 
 
@@ -31,6 +32,9 @@ def main():
     parser.add_argument("--p-idle-factor", type=float, default=0.1)
     parser.add_argument("--output-dir", default="exp3_syk/results")
     parser.add_argument("--fig-dir", default="exp3_syk/figures")
+    parser.add_argument("--colors-k", nargs="+", type=float,
+                        default=list(COLORS_K_VALUES),
+                        help="k values for colors-vs-N plot (default: 0.5 1 2 3)")
     parser.add_argument("--plot-only", action="store_true",
                         help="Skip data collection, re-plot from existing CSV")
     args = parser.parse_args()
@@ -49,7 +53,19 @@ def main():
             output_dir=args.output_dir,
         )
 
-    generate_all_plots(df, args.fig_dir)
+    # Collect (or load) colors data for multiple k values
+    colors_csv = f"{args.output_dir}/colors_data.csv"
+    if args.plot_only and os.path.exists(colors_csv):
+        colors_df = pd.read_csv(colors_csv)
+    else:
+        colors_df = collect_colors_data(
+            L_values=args.L,
+            k_values=args.colors_k,
+            n_instances=args.n_instances,
+            output_dir=args.output_dir,
+        )
+
+    generate_all_plots(df, args.fig_dir, colors_df=colors_df)
 
 
 if __name__ == "__main__":

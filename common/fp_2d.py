@@ -4,7 +4,7 @@ All three baselines share the same Row-Col-Row decomposition structure:
     RowA (FSWAP sort) -> Gamma -> Col (bare FSWAP sort) -> Gamma -> RowB (FSWAP sort)
 
 They differ only in the Gamma operator used:
-    Baseline 2 (ANCILLA):   7L-3 depth, L ancillas
+    Baseline 2 (ANCILLA):   13L+4 depth, L ancillas
     Baseline 3 (PRIMITIVE):  12L+8 depth, 0 ancillas
     Baseline 4 (PIPELINED):  8L+O(1) depth, 0 ancillas  <-- best
 """
