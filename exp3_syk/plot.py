@@ -10,6 +10,7 @@ Generates 4 plots:
 from __future__ import annotations
 
 import os
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -220,14 +221,23 @@ def plot_depth_breakdown_trend(df: pd.DataFrame, output_dir: str = "exp3_syk/fig
     _save_fig(fig, "depth_breakdown_trend", output_dir)
 
 
-def plot_colors_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
-    """Number of colors used vs N for multiple k values."""
+def plot_colors_vs_N(
+    df: pd.DataFrame,
+    output_dir: str = "exp3_syk/figures",
+    colors_df: Optional[pd.DataFrame] = None,
+):
+    """Number of colors used vs N for multiple k values.
+
+    If colors_df is provided, it is used instead of df for this plot.
+    colors_df should have columns: L, N, k, instance_idx, n_colors.
+    """
     _setup_style()
+    src = colors_df if colors_df is not None else df
 
     fig, ax = plt.subplots(figsize=(6, 4))
 
-    for k_val in sorted(df["k"].unique()):
-        df_k = df[df["k"] == k_val]
+    for k_val in sorted(src["k"].unique()):
+        df_k = src[src["k"] == k_val]
         df_unique = df_k.drop_duplicates(subset=["L", "k", "instance_idx"])
         grouped = df_unique.groupby("N")["n_colors"]
         N_vals = grouped.mean().index.values
@@ -247,11 +257,15 @@ def plot_colors_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
     _save_fig(fig, "colors_vs_N", output_dir)
 
 
-def generate_all_plots(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
+def generate_all_plots(
+    df: pd.DataFrame,
+    output_dir: str = "exp3_syk/figures",
+    colors_df: Optional[pd.DataFrame] = None,
+):
     """Generate all Experiment 3 plots."""
     print(f"Generating plots in {output_dir}/")
     plot_spacetime_vs_N(df, output_dir)
     plot_fidelity_vs_N(df, output_dir)
     plot_depth_breakdown_trend(df, output_dir)
-    plot_colors_vs_N(df, output_dir)
+    plot_colors_vs_N(df, output_dir, colors_df=colors_df)
     print("All plots saved.")

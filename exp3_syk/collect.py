@@ -23,6 +23,10 @@ from exp3_syk.syk_instance import SYKInstance, generate_sparse_syk
 from exp3_syk.trotter import build_trotter_step_fp, build_trotter_step_naive
 
 
+# Default k values for the colors-vs-N plot (lightweight, no circuit building)
+COLORS_K_VALUES = (0.5, 1.0, 2.0, 3.0)
+
+
 BASELINE_CONFIGS = [
     ("naive_pauli", None),
     ("1d", None),
@@ -146,4 +150,39 @@ def run_experiment(
 
     df = pd.DataFrame(all_rows)
     _log(f"\nExperiment complete. {len(df)} total rows.")
+    return df
+
+
+def collect_colors_data(
+    L_values: Sequence[int] = (4, 6, 8, 10, 12, 14, 16, 18, 20),
+    k_values: Sequence[float] = COLORS_K_VALUES,
+    n_instances: int = 10,
+    output_dir: str = "exp3_syk/results",
+) -> pd.DataFrame:
+    """Lightweight collection of n_colors for multiple k values.
+
+    Only generates SYK instances and records coloring statistics —
+    no circuit building.  Fast even for large L.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    csv_path = os.path.join(output_dir, "colors_data.csv")
+    rows: List[Dict] = []
+
+    for L in L_values:
+        for k in k_values:
+            for idx in range(n_instances):
+                rng = np.random.default_rng(seed=idx)
+                instance = generate_sparse_syk(L, k, rng)
+                rows.append({
+                    "L": L,
+                    "N": L * L,
+                    "k": k,
+                    "instance_idx": idx,
+                    "n_colors": instance.n_colors,
+                    "n_quartets": len(instance.quartets),
+                })
+
+    df = pd.DataFrame(rows)
+    df.to_csv(csv_path, index=False)
+    _log(f"Colors data: {len(df)} rows saved to {csv_path}")
     return df

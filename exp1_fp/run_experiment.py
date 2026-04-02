@@ -19,8 +19,8 @@ from exp1_fp.plot import generate_all_plots
 
 def main():
     parser = argparse.ArgumentParser(description="Experiment 1: FP Benchmarking")
-    parser.add_argument("--L", nargs="+", type=int, default=[4, 6, 8, 10, 12, 14, 16],
-                        help="Grid side lengths (default: 4 6 8 10 12 14 16)")
+    parser.add_argument("--L", nargs="+", type=int, default=[4, 6, 8, 10, 12, 14, 16, 18, 20],
+                        help="Grid side lengths (default: 4 6 8 10 12 14 16 18 20)")
     parser.add_argument("--perms", nargs="+", default=["reverse", "transpose", "random"],
                         help="Permutation types")
     parser.add_argument("--n-random", type=int, default=20,

@@ -98,7 +98,7 @@ def collect_instance(
 
 
 def run_experiment(
-    L_values: Sequence[int] = (4, 6, 8, 10, 12, 14, 16),
+    L_values: Sequence[int] = (4, 6, 8, 10, 12, 14, 16, 18, 20),
     perm_kinds: Sequence[str] = ("reverse", "transpose", "random"),
     n_random: int = 20,
     p_values: Sequence[float] = (1e-3, 1e-4, 1e-5),
