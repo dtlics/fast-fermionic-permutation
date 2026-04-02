@@ -10,7 +10,8 @@ strictly better than naive SWAP (3 CNOTs) + CZ (1 CNOT).
 from typing import List
 
 import pennylane as qp
-from openfermion.circuits.gates import FSWAP, FSwapPowGate
+
+from common.stim_convert import FSwapPowGate
 
 # Cost of one FSWAP in CNOT-equivalent depth
 FSWAP_CNOT_COST = 2

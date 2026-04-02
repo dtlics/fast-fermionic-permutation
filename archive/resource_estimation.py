@@ -15,6 +15,9 @@ import time
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
+from common.oet_sort import FSWAP
+from common.stim_convert import FSwapPowGate
+
 # Keep matplotlib cache writable in sandboxed environments.
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
@@ -22,7 +25,6 @@ import pennylane as qp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from openfermion.circuits.gates import FSWAP, FSwapPowGate
 
 from visualize_fermionic import CompressedFermionicPermutation, GridTopology, decompose_permutation
 

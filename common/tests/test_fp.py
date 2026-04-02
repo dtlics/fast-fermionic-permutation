@@ -13,7 +13,6 @@ Verifies:
 import numpy as np
 import pytest
 import pennylane as qp
-from openfermion.circuits.gates import FSWAP
 
 from common.grid import validate_permutation
 from common.hall_decomposition import decompose_permutation_rcr
