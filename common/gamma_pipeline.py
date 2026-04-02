@@ -20,7 +20,7 @@ Two pipelined constructions:
 
 from typing import Dict, List, Tuple
 
-import cirq
+import pennylane as qp
 
 from common.grid import column_parity_cascade_ops, make_system_qubits
 from common.gamma_primitive import prefix_cascade_ops, undo_prefix_cascade_ops
@@ -30,7 +30,7 @@ from common.gamma_primitive import prefix_cascade_ops, undo_prefix_cascade_ops
 # Prefix-based same-row T(x,x)
 # ---------------------------------------------------------------------------
 
-def same_row_T_prefix_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def same_row_T_prefix_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Same-row T(x,x) using prefix cascade (instead of suffix).
 
     After prefix cascade, position c holds x_hat_c = XOR_{c'<=c} x_{c'}.
@@ -41,11 +41,11 @@ def same_row_T_prefix_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
     ops = []
     ops.extend(prefix_cascade_ops(sq, r, L))
     for c in range(L - 1):
-        ops.append(cirq.CZ(sq[(r, c)], sq[(r, c + 1)]))
+        ops.append(qp.CZ(sq[(r, c)], sq[(r, c + 1)]))
     ops.extend(undo_prefix_cascade_ops(sq, r, L))
     for p in range(L - 1):
         if (L - 1 - p) % 2 == 1:
-            ops.append(cirq.Z(sq[(r, p)]))
+            ops.append(qp.Z(sq[(r, p)]))
     return ops
 
 
@@ -53,7 +53,7 @@ def same_row_T_prefix_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
 # Construction B: PipelineSameCross (same-row T + cross-row T)
 # ---------------------------------------------------------------------------
 
-def pipeline_same_cross_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def pipeline_same_cross_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Fused same-row T(x,x) + cross-row T(x,y) for even row r, odd row r+1.
 
     Forward: cascade CNOT at offset 0, cross-row CZ at -2, same-row CZ at -4/-3.
@@ -64,23 +64,23 @@ def pipeline_same_cross_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
     max_fwd = L - 2 + 4
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r, c)], sq[(r2, c)]))
         c_lo, c_hi = tau - 4, tau - 3
         if 0 <= c_lo and c_hi < L:
-            ops.append(cirq.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
+            ops.append(qp.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
     max_undo_extra = 3
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r, c)], sq[(r2, c)]))
         c = tau + 3
         if 0 <= c < L and (L - 1 - c) % 2 == 1:
-            ops.append(cirq.Z(sq[(r, c)]))
+            ops.append(qp.Z(sq[(r, c)]))
     return ops
 
 
@@ -88,7 +88,7 @@ def pipeline_same_cross_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
 # Construction A: PipelineSameSkip (same-row T + skip-row T)
 # ---------------------------------------------------------------------------
 
-def pipeline_same_skip_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def pipeline_same_skip_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Fused same-row T(x~,x~) + skip-row T(x~, y~) for rows r, r+1, r+2.
 
     Forward: cascade at 0; skip gadget at -1..-4; same-row CZ at -6/-5.
@@ -99,41 +99,41 @@ def pipeline_same_skip_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
     max_fwd = L - 2 + 6
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau - 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau - 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c_lo, c_hi = tau - 6, tau - 5
         if 0 <= c_lo and c_hi < L:
-            ops.append(cirq.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
+            ops.append(qp.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
     max_undo_extra = 5
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau + 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau + 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau + 5
         if 0 <= c < L and (L - 1 - c) % 2 == 1:
-            ops.append(cirq.Z(sq[(r, c)]))
+            ops.append(qp.Z(sq[(r, c)]))
     return ops
 
 
@@ -141,7 +141,7 @@ def pipeline_same_skip_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
 # Skip-only pipeline (row 0 in parity basis -- no same-row T per f_B formula)
 # ---------------------------------------------------------------------------
 
-def pipeline_skip_only_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def pipeline_skip_only_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Skip-row T only (no same-row T). For row 0 in parity basis.
 
     f_B excludes same-row T for r=0.  Same pipeline structure as
@@ -153,35 +153,35 @@ def pipeline_skip_only_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
     max_fwd = L - 1 + 4
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau - 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau - 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
     max_undo_extra = 4
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau + 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau + 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
     return ops
 
 
@@ -262,6 +262,6 @@ def build_gamma_pipelined(L: int, sq=None):
     if L % 2 == 1:
         ops.extend(same_row_T_prefix_ops(sq, L - 1, L))
 
-    circuit = cirq.Circuit(ops)
+    circuit = qp.tape.qscript.QuantumScript(ops)
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
     return circuit, sys_list

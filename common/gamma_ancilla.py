@@ -11,7 +11,7 @@ cascade sweeps on the system qubits.
 
 from typing import Dict, List, Tuple
 
-import cirq
+import pennylane as qp
 
 from common.grid import (
     column_parity_cascade_ops,
@@ -21,49 +21,49 @@ from common.grid import (
 
 
 def build_stage_B_ops(
-    sq: Dict[Tuple[int, int], cirq.GridQubit],
-    aq: Dict[int, cirq.NamedQubit],
+    sq: Dict[Tuple[int, int], qp.wires.Wires],
+    aq: Dict[int, qp.wires.Wires],
     L: int,
-) -> List[cirq.Operation]:
+) -> List[qp.ops.Operation]:
     """Stage B: parity-basis CZ sweep (R->L). Depth 3L."""
     ops = []
     for p in range(L - 1, -1, -1):
         for r in range(0, L, 2):
             if r + 2 <= L - 1:
-                ops.append(cirq.CZ(sq[(r, p)], aq[r + 2]))
+                ops.append(qp.CZ(sq[(r, p)], aq[r + 2]))
             if r >= 2:
-                ops.append(cirq.CZ(sq[(r, p)], aq[r]))
+                ops.append(qp.CZ(sq[(r, p)], aq[r]))
         for r in range(L):
-            ops.append(cirq.CNOT(sq[(r, p)], aq[r]))
+            ops.append(qp.CNOT(sq[(r, p)], aq[r]))
     return ops
 
 
 def ancilla_column_cascade_ops(
-    aq: Dict[int, cirq.NamedQubit], L: int, inverse: bool = False
-) -> List[cirq.Operation]:
+    aq: Dict[int, qp.wires.Wires], L: int, inverse: bool = False
+) -> List[qp.ops.Operation]:
     """CNOT cascade on ancilla column. Depth L-1."""
     if not inverse:
-        return [cirq.CNOT(aq[r + 1], aq[r]) for r in range(L - 2, -1, -1)]
+        return [qp.CNOT(aq[r + 1], aq[r]) for r in range(L - 2, -1, -1)]
     else:
-        return [cirq.CNOT(aq[r + 1], aq[r]) for r in range(L - 1)]
+        return [qp.CNOT(aq[r + 1], aq[r]) for r in range(L - 1)]
 
 
 def build_stage_D_ops(
-    sq: Dict[Tuple[int, int], cirq.GridQubit],
-    aq: Dict[int, cirq.NamedQubit],
+    sq: Dict[Tuple[int, int], qp.wires.Wires],
+    aq: Dict[int, qp.wires.Wires],
     L: int,
-) -> List[cirq.Operation]:
+) -> List[qp.ops.Operation]:
     """Stage D: original-basis CZ sweep (L->R). Depth 2L+1."""
     ops = []
     for p in range(L):
         for r in range(L):
-            ops.append(cirq.CNOT(sq[(r, p)], aq[r]))
+            ops.append(qp.CNOT(sq[(r, p)], aq[r]))
         for r in range(0, L, 2):
             if r + 1 < L:
-                ops.append(cirq.CZ(sq[(r, p)], aq[r]))
-                ops.append(cirq.CZ(sq[(r, p)], aq[r + 1]))
+                ops.append(qp.CZ(sq[(r, p)], aq[r]))
+                ops.append(qp.CZ(sq[(r, p)], aq[r + 1]))
             else:
-                ops.append(cirq.CZ(sq[(r, p)], aq[r]))
+                ops.append(qp.CZ(sq[(r, p)], aq[r]))
     return ops
 
 
@@ -90,7 +90,7 @@ def build_gamma_with_ancillas(L: int, sq=None, aq=None):
     ops.extend(column_parity_cascade_ops(sq, L, inverse=True))    # Stage C (sys)
     ops.extend(ancilla_column_cascade_ops(aq, L, inverse=True))   # Stage C (anc)
     ops.extend(build_stage_D_ops(sq, aq, L))                      # Stage D
-    circuit = cirq.Circuit(ops)
+    circuit = qp.tape.qscript.QuantumScript(ops)
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
     anc_list = [aq[r] for r in range(L)]
     return circuit, sys_list, anc_list

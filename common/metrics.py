@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict
 
-import cirq
+import pennylane as qp
 
 from common.fswap import FSWAP_CNOT_COST, is_fswap
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 # Core resource counter
 # ---------------------------------------------------------------------------
 
-def count_resources(circuit: cirq.Circuit, L: int, n_ancillas: int = 0) -> Dict:
+def count_resources(circuit: qp.tape.qscript.QuantumScript, L: int, n_ancillas: int = 0) -> Dict:
     """Count gate resources for a fermionic permutation circuit.
 
     Scans every moment.  Only moments containing at least one 2-qubit gate
@@ -53,6 +53,7 @@ def count_resources(circuit: cirq.Circuit, L: int, n_ancillas: int = 0) -> Dict:
     total_cnots = 0
     total_idle_slots = 0
 
+    # TODO: use the converter to moments here!
     for moment in circuit:
         n_2q_in_moment = 0
         has_fswap = False

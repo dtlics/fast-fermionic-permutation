@@ -18,7 +18,7 @@ The four phases are:
 
 from typing import Dict, List, Tuple
 
-import cirq
+import pennylane as qp
 
 from common.grid import column_parity_cascade_ops, make_system_qubits
 
@@ -27,69 +27,69 @@ from common.grid import column_parity_cascade_ops, make_system_qubits
 # Cascade primitives (also used by gamma_pipeline.py)
 # ---------------------------------------------------------------------------
 
-def suffix_cascade_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def suffix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Suffix CNOT cascade: right-to-left on row r."""
-    return [cirq.CNOT(sq[(r, c + 1)], sq[(r, c)]) for c in range(L - 2, -1, -1)]
+    return [qp.CNOT(sq[(r, c + 1)], sq[(r, c)]) for c in range(L - 2, -1, -1)]
 
 
-def undo_suffix_cascade_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def undo_suffix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Undo suffix cascade: left-to-right on row r."""
-    return [cirq.CNOT(sq[(r, c + 1)], sq[(r, c)]) for c in range(L - 1)]
+    return [qp.CNOT(sq[(r, c + 1)], sq[(r, c)]) for c in range(L - 1)]
 
 
-def prefix_cascade_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def prefix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Prefix CNOT cascade: left-to-right on row r."""
-    return [cirq.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(1, L)]
+    return [qp.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(1, L)]
 
 
-def undo_prefix_cascade_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def undo_prefix_cascade_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Undo prefix cascade: right-to-left on row r."""
-    return [cirq.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(L - 1, 0, -1)]
+    return [qp.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(L - 1, 0, -1)]
 
 
 # ---------------------------------------------------------------------------
 # Three T(x,y) primitives
 # ---------------------------------------------------------------------------
 
-def same_row_T_ops(sq: Dict, r: int, L: int) -> List[cirq.Operation]:
+def same_row_T_ops(sq: Dict, r: int, L: int) -> List[qp.ops.Operation]:
     """Primitive 1: T(x,x) for row r using suffix cascade. Depth 2L."""
     ops = []
     ops.extend(suffix_cascade_ops(sq, r, L))
     for c in range(L - 1):
-        ops.append(cirq.CZ(sq[(r, c)], sq[(r, c + 1)]))
+        ops.append(qp.CZ(sq[(r, c)], sq[(r, c + 1)]))
     ops.extend(undo_suffix_cascade_ops(sq, r, L))
     for c in range(1, L, 2):
-        ops.append(cirq.Z(sq[(r, c)]))
+        ops.append(qp.Z(sq[(r, c)]))
     return ops
 
 
-def cross_row_adjacent_T_ops(sq: Dict, r1: int, r2: int, L: int) -> List[cirq.Operation]:
+def cross_row_adjacent_T_ops(sq: Dict, r1: int, r2: int, L: int) -> List[qp.ops.Operation]:
     """Primitive 2: T(x,y) for adjacent rows r1, r2. Depth 2L."""
     ops = []
     ops.extend(prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(cirq.CZ(sq[(r1, c)], sq[(r2, c)]))
+        ops.append(qp.CZ(sq[(r1, c)], sq[(r2, c)]))
     ops.extend(undo_prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(cirq.CZ(sq[(r1, c)], sq[(r2, c)]))
+        ops.append(qp.CZ(sq[(r1, c)], sq[(r2, c)]))
     return ops
 
 
-def skip_row_T_ops(sq: Dict, r1: int, r2: int, r_mid: int, L: int) -> List[cirq.Operation]:
+def skip_row_T_ops(sq: Dict, r1: int, r2: int, r_mid: int, L: int) -> List[qp.ops.Operation]:
     """Primitive 3: T(x,y) for rows 2 apart, routing through r_mid. Depth 2L+4."""
     ops = []
     ops.extend(prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(cirq.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
-        ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(cirq.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
     ops.extend(undo_prefix_cascade_ops(sq, r1, L))
     for c in range(L):
-        ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(cirq.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
-        ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
-        ops.append(cirq.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
+        ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+        ops.append(qp.CNOT(sq[(r1, c)], sq[(r_mid, c)]))
     return ops
 
 
@@ -100,10 +100,10 @@ def skip_row_T_ops(sq: Dict, r1: int, r2: int, r_mid: int, L: int) -> List[cirq.
 def build_gamma_ancilla_free(L: int, sq=None):
     """Build ancilla-free Gamma using sequential primitives (Baseline 3).
 
-    Each phase is built as a separate cirq.Circuit and concatenated with ``+``
+    Each phase is built as a separate qp.tape.qscript.QuantumScript and concatenated with ``+``
     to prevent cross-phase moment merging.  Within each phase, operations on
     disjoint qubits (e.g. same-row T on different rows) are still parallelised
-    by cirq's greedy scheduler.
+    by qp's greedy scheduler.
 
     This gives depth **12L + 8** (exact for L >= 5), matching the theoretical
     sequential-phase analysis:
@@ -156,14 +156,15 @@ def build_gamma_ancilla_free(L: int, sq=None):
         phase4b_ops.extend(cross_row_adjacent_T_ops(sq, r, r + 1, L))
 
     # Concatenate phases -- '+' preserves moment boundaries across phases
+    # TODO: use barriers or something here, and converter?
     circuit = (
-        cirq.Circuit(phase1_ops)
-        + cirq.Circuit(phase2a_ops)
-        + cirq.Circuit(phase2b1_ops)
-        + cirq.Circuit(phase2b2_ops)
-        + cirq.Circuit(phase3_ops)
-        + cirq.Circuit(phase4a_ops)
-        + cirq.Circuit(phase4b_ops)
+        qp.tape.qscript.QuantumScript(phase1_ops)
+        + qp.tape.qscript.QuantumScript(phase2a_ops)
+        + qp.tape.qscript.QuantumScript(phase2b1_ops)
+        + qp.tape.qscript.QuantumScript(phase2b2_ops)
+        + qp.tape.qscript.QuantumScript(phase3_ops)
+        + qp.tape.qscript.QuantumScript(phase4a_ops)
+        + qp.tape.qscript.QuantumScript(phase4b_ops)
     )
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
     return circuit, sys_list

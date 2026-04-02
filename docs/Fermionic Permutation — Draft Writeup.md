@@ -588,13 +588,13 @@ $$\Delta f = 0 + \bigoplus_{c' < c_0} (s_{r_0, c'} \oplus s_{r_0+1, c'}) = P \qq
 
 ## 11. Empirical Validation
 
-All circuits are implemented in Cirq and verified via simulation. Source code is in `FP.ipynb`.
+All circuits are implemented in qp and verified via simulation. Source code is in `FP.ipynb`.
 
 ### 11.1 Experimental Setup
 
 - **Grid sizes tested:** $L \in \{3, 4, 5, 7, 9, 11, 13, 15, 17, 20\}$ (corresponding to $N = 9$ through $N = 400$).
 - **Permutations per $L$:** 5 total — 3 random (seeded), 1 transpose $(r,c) \to (c,r)$, 1 reverse $[N{-}1, \ldots, 0]$.
-- **CNOT depth counting:** Each FSWAP moment contributes 2 CNOT depth (since FSWAP requires 2 sequential CNOTs on the same pair). Each CZ or CNOT moment contributes 1 CNOT depth. Cirq's greedy scheduler is used for all methods to ensure a fair comparison.
+- **CNOT depth counting:** Each FSWAP moment contributes 2 CNOT depth (since FSWAP requires 2 sequential CNOTs on the same pair). Each CZ or CNOT moment contributes 1 CNOT depth. qp's greedy scheduler is used for all methods to ensure a fair comparison.
 - **Three methods compared:**
   1. **Baseline:** Treat the 2D grid as a 1D snake (using the JWT ordering) and apply odd-even transposition sort with FSWAP gates.
   2. **Ancilla $\Gamma$:** Hall's Row-Col-Row routing with the ancilla-based $\Gamma$ construction ($L$ ancilla qubits, $7L{-}3$ CNOT depth per $\Gamma$).

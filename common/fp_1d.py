@@ -11,8 +11,9 @@ This is the simplest baseline -- no Hall decomposition, no Gamma.
 
 from typing import Dict, List, Optional, Sequence, Tuple
 
-import cirq
+import pennylane as qp
 import numpy as np
+from functools import reduce
 
 from common.grid import (
     raster_to_snake_index_map,
@@ -49,12 +50,12 @@ def build_fp_1d(L: int, perm_raster: Sequence[int]) -> FPResult:
         dst_r = perm_raster[src_r]
         perm_snake[r2s[src_r]] = r2s[dst_r]
 
-    qubits = [cirq.GridQubit(*snake_to_rc(i, L)) for i in range(N)]
+    qubits = [qp.wires.Wires(str(snake_to_rc(i, L))) for i in range(N)]
     ops = fswap_odd_even_sort_ops(qubits, perm_snake)
 
-    circuit = cirq.Circuit(ops)
+    circuit = qp.tape.qscript.QuantumScript(ops)
     # sys_qubits in raster order (same GridQubit objects, different list order)
-    sys_list = [cirq.GridQubit(r, c) for r in range(L) for c in range(L)]
+    sys_list = [qp.wires.Wires(r, c) for r in range(L) for c in range(L)]
     return FPResult(
         circuit=circuit,
         sys_qubits=sys_list,

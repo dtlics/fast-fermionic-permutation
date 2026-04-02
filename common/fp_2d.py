@@ -12,7 +12,7 @@ They differ only in the Gamma operator used:
 from enum import Enum
 from typing import List, NamedTuple, Optional, Sequence
 
-import cirq
+import pennylane as qp
 
 from common.grid import make_ancilla_qubits, make_system_qubits, validate_permutation
 from common.hall_decomposition import decompose_permutation_rcr
@@ -33,7 +33,7 @@ class FPResult(NamedTuple):
     """Result of building a fermionic permutation circuit.
 
     Attributes:
-        circuit: the cirq.Circuit implementing F_pi
+        circuit: the qp.tape.qscript.QuantumScript implementing F_pi
         sys_qubits: list of system (data) qubits in raster order
         anc_qubits: list of ancilla qubits (empty [] if ancilla-free).
                     Ancillas are assumed initialised to |0> and guaranteed
@@ -42,9 +42,9 @@ class FPResult(NamedTuple):
                       or None for 1D baseline)
         L: grid side length (N = L^2 data qubits)
     """
-    circuit: cirq.Circuit
-    sys_qubits: List[cirq.Qid]
-    anc_qubits: List[cirq.Qid]
+    circuit: qp.tape.qscript.QuantumScript
+    sys_qubits: List[str]
+    anc_qubits: List[str]
     gamma_method: Optional[str]
     L: int
 
@@ -103,12 +103,13 @@ def build_fp_2d(
         raise ValueError(f"Unknown gamma method: {gamma_method}")
 
     # Assemble: RowA + Gamma + Col + Gamma + RowB
+    # TODO: use barriers here and converter?
     circuit = (
-        cirq.Circuit(rowA_ops)
+        qp.tape.qscript.QuantumScript(rowA_ops)
         + gamma_circ
-        + cirq.Circuit(col_ops)
+        + qp.tape.qscript.QuantumScript(col_ops)
         + gamma_circ
-        + cirq.Circuit(rowB_ops)
+        + qp.tape.qscript.QuantumScript(rowB_ops)
     )
 
     return FPResult(
