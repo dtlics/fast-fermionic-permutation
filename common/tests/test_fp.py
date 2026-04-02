@@ -113,7 +113,7 @@ def test_fp_1d_returns_fp_result():
 @pytest.mark.parametrize("L", [3])
 def test_end_to_end_all_baselines(L):
     """All 4 baselines produce the same density matrix for L=3."""
-    dev = qp.device('default.clifford')
+    dev = qp.device('default.clifford', tableau=False)
 
     rng = np.random.default_rng(42)
     N = L * L
@@ -187,7 +187,7 @@ def test_ancilla_disentanglement(L):
     rng = np.random.default_rng(42 + L)
     N = L * L
 
-    dev = qp.device('default.clifford')
+    dev = qp.device('default.clifford', tableau=False)
 
     perm = rng.permutation(N).tolist()
     res = build_fp_2d(L, perm, GammaMethod.ANCILLA)
