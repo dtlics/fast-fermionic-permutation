@@ -1,6 +1,5 @@
 """Baseline 3: Ancilla-free Gamma using sequential T(x,y) primitives.
 
-CNOT depth: 12L + 8 (exact for L >= 5, phase-separated construction)
 Ancillas: 0
 Gate count: O(N)
 
@@ -9,11 +8,27 @@ Implements Gamma = D_D * C^{-1} * D_B * C using three circuit primitives:
     Primitive 2: cross-row adjacent T(x,y) -- depth 2L
     Primitive 3: skip-row T(x,y) via middle row -- depth 2L+4
 
-The four phases are:
-    Phase 1: Column parity cascade forward (L-1)
-    Phase 2: Parity-basis interactions f_B (same-row + skip-row on even rows)
-    Phase 3: Column parity cascade inverse (L-1)
-    Phase 4: Original-basis interactions f_D (same-row + cross-row)
+Depth scaling
+-------------
+Phase-separated construction (this implementation, phases joined with +):
+    Phase 1  (col parity fwd):     L - 1
+    Phase 2a (f_B same-row T):     2L + 1
+    Phase 2b (f_B skip-row, x2):   2 * (2L + 4)
+    Phase 3  (col parity inv):     L - 1
+    Phase 4a (f_D same-row T):     2L + 1
+    Phase 4b (f_D cross-row T):    2L
+    Total:   12L + 8   (exact for L >= 5)
+
+With cirq greedy pipelining (all ops in one cirq.Circuit, NOT used here):
+    Total:   9L + 12   (odd L) or 9L + 13 (even L), exact for L >= 5
+    Main savings:
+      P2a + P2b1: same-row T on even rows overlaps with skip-row T
+        batch 1 on disjoint row triples.  ~6 moments saved.
+      P4a + P4b:  same-row T on even rows overlaps with cross-row T
+        on disjoint even-odd pairs.  ~6 moments saved.
+    NOTE: greedy pipelining is intentionally NOT applied to this baseline.
+    Baseline 4 (gamma_pipeline.py) achieves 8L+9/10 via manual pipelining,
+    which is strictly better than the ~9L greedy result here.
 """
 
 from typing import Dict, List, Tuple

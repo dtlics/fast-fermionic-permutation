@@ -1,9 +1,13 @@
 """Tests for all three Gamma constructions.
 
 Verifies:
-    1. Depth formulas: 7L-3 (ancilla), 9L+12 (primitive), 8L+9/10 (pipelined)
-    2. All three constructions produce identical phases on basis states
-    3. Property (*) holds: Gamma * FSWAP_bare * Gamma = FSWAP_full for vertical pairs
+    1. Depth formulas: 13L+4 (ancilla), 12L+8 (primitive), 8L+9/10 (pipelined)
+    2. NN compliance: every 2q gate is between adjacent GridQubits
+    3. No qubit conflicts: no qubit appears in two gates within one moment
+    4. All three constructions produce identical phases on basis states
+    5. Gamma is diagonal: preserves bit values, only applies phases
+    6. Ancilla disentanglement: ancillas return to |0> after Gamma
+    7. Property (*) holds: Gamma * FSWAP_bare * Gamma = FSWAP_full
 """
 
 import numpy as np
@@ -69,70 +73,68 @@ def get_phase_with_ancillas(circuit, sys_qubits, anc_qubits, basis_state_int):
 
 
 # ---------------------------------------------------------------------------
-# Depth formula tests
+# Helper: verify NN compliance and no conflicts for any circuit
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("L", [7, 9, 11, 15])
-def test_gamma_ancilla_depth(L):
-    """Verify ancilla Gamma physical NN depth with cross-step pipelining.
-
-    Without pipelining (step-separated): 18L - 1
-        A (L-1) + B (10*L) + C (L-1) + D (6*L) + diag (1)
-
-    With cirq greedy pipelining: ~13L
-        Stage B: ~8/step (substep 3 of step p overlaps substep 1 of step p-1)
-        Stage D: ~3/step (odd advance overlaps next even advance)
-
-    We verify depth <= 14L (conservative) to allow scheduler variance.
-    """
-    circ, _, _ = build_gamma_with_ancillas(L)
-    # Greedy scheduler achieves ~13L; assert <= 14L as conservative bound
-    assert len(circ) <= 14 * L, (
-        f"L={L}: got {len(circ)}, expected <= {14 * L} (14L)"
-    )
-    # Also assert it's better than unpipelined 18L
-    assert len(circ) < 18 * L, (
-        f"L={L}: got {len(circ)}, expected < {18 * L} (18L unpipelined)"
-    )
-
-
-@pytest.mark.parametrize("L", [3, 5, 7])
-def test_ancilla_gamma_all_nn(L):
-    """Every 2q gate in the ancilla Gamma is between NN GridQubits."""
-    circ, _, _ = build_gamma_with_ancillas(L)
+def _assert_nn_and_no_conflicts(circ, L, label=""):
+    """Assert every 2q gate is NN GridQubit and no qubit conflicts per moment."""
     for i, moment in enumerate(circ):
         used = set()
         for op in moment:
-            # No qubit conflicts within a moment
             for q in op.qubits:
-                assert q not in used, f"L={L} moment {i}: qubit {q} used twice"
+                assert q not in used, (
+                    f"{label} L={L} moment {i}: qubit {q} used by two gates"
+                )
                 used.add(q)
             if len(op.qubits) == 2:
                 q0, q1 = op.qubits
                 assert isinstance(q0, cirq.GridQubit) and isinstance(q1, cirq.GridQubit), (
-                    f"L={L} moment {i}: non-GridQubit gate {op}"
+                    f"{label} L={L} moment {i}: non-GridQubit gate {op}"
                 )
                 dist = abs(q0.row - q1.row) + abs(q0.col - q1.col)
                 assert dist == 1, (
-                    f"L={L} moment {i}: non-NN gate {op.gate} on {q0},{q1} (dist={dist})"
+                    f"{label} L={L} moment {i}: non-NN gate {op.gate} "
+                    f"on {q0},{q1} (manhattan dist={dist})"
                 )
 
 
-@pytest.mark.parametrize("L", [5, 7, 9, 11, 15])
-def test_gamma_primitive_depth(L):
-    """Verify ancilla-free primitive Gamma depth = 12L + 8 (exact for L >= 5).
+# ===================================================================
+# 1. Depth formula tests
+# ===================================================================
 
-    Phase-separated construction prevents cross-phase moment merging,
-    giving the theoretical sequential-phase depth.
+@pytest.mark.parametrize("L", [7, 9, 11, 15, 20])
+def test_gamma_ancilla_depth(L):
+    """Ancilla Gamma depth = 13L + 4 (exact for L >= 7).
+
+    Achieved by cirq's greedy cross-step pipelining:
+      Stage B: 10/step -> ~8/step (tail of step p overlaps head of step p-1)
+      Stage D: 6/step -> ~3/step (odd advance overlaps next even advance)
+    Without pipelining: 18L - 1.
+    """
+    circ, _, _ = build_gamma_with_ancillas(L)
+    expected = 13 * L + 4
+    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+
+
+@pytest.mark.parametrize("L", [5, 7, 9, 11, 15, 20])
+def test_gamma_primitive_depth(L):
+    """Ancilla-free primitive Gamma depth = 12L + 8 (exact for L >= 5).
+
+    Phase-separated construction (phases joined with +) prevents
+    cross-phase moment merging.  Without separation: ~9L + 12.
     """
     circ, _ = build_gamma_ancilla_free(L)
     expected = 12 * L + 8
     assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
 
 
-@pytest.mark.parametrize("L", [5, 7, 9, 11, 15])
+@pytest.mark.parametrize("L", [5, 7, 9, 11, 15, 20])
 def test_gamma_pipelined_depth(L):
-    """Verify pipelined Gamma depth = 8L+9 (odd) or 8L+10 (even)."""
+    """Pipelined Gamma depth = 8L+9 (odd) or 8L+10 (even).
+
+    Manual pipelining already saturates all parallelism -- cirq's greedy
+    scheduler achieves zero additional savings.
+    """
     circ, _ = build_gamma_pipelined(L)
     if L % 2 == 1:
         expected = 8 * L + 9
@@ -141,9 +143,34 @@ def test_gamma_pipelined_depth(L):
     assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
 
 
-# ---------------------------------------------------------------------------
-# Cross-construction equivalence
-# ---------------------------------------------------------------------------
+# ===================================================================
+# 2. NN compliance and no-conflict tests
+# ===================================================================
+
+@pytest.mark.parametrize("L", [3, 5, 7, 9])
+def test_ancilla_gamma_nn_compliance(L):
+    """Every gate in ancilla Gamma is between NN GridQubits, no conflicts."""
+    circ, _, _ = build_gamma_with_ancillas(L)
+    _assert_nn_and_no_conflicts(circ, L, label="ancilla")
+
+
+@pytest.mark.parametrize("L", [3, 5, 7, 9])
+def test_primitive_gamma_nn_compliance(L):
+    """Every gate in primitive Gamma is between NN GridQubits, no conflicts."""
+    circ, _ = build_gamma_ancilla_free(L)
+    _assert_nn_and_no_conflicts(circ, L, label="primitive")
+
+
+@pytest.mark.parametrize("L", [3, 5, 7, 9])
+def test_pipelined_gamma_nn_compliance(L):
+    """Every gate in pipelined Gamma is between NN GridQubits, no conflicts."""
+    circ, _ = build_gamma_pipelined(L)
+    _assert_nn_and_no_conflicts(circ, L, label="pipelined")
+
+
+# ===================================================================
+# 3. Cross-construction equivalence
+# ===================================================================
 
 @pytest.mark.parametrize("L", [3, 4, 5, 7])
 def test_gamma_equivalence(L):
@@ -166,46 +193,16 @@ def test_gamma_equivalence(L):
         assert abs(p1 - p3) < 1e-6, f"L={L}: ancilla vs pipelined mismatch on state {s}"
 
 
-# ---------------------------------------------------------------------------
-# Property (*) verification
-# ---------------------------------------------------------------------------
-
-def verify_property_star(phase_fn, L, num_samples=200, seed=42):
-    """Verify property (star) on sampled basis states.
-
-    For every vertical grid-neighbor pair (r,c)<->(r+1,c) with JWT indices j<k:
-        gamma_s * gamma_s' = (-1)^{sum of bits between j and k}
-    where s,s' differ only at j,k with s_j + s_k = 1.
-    """
-    rng = np.random.default_rng(seed)
-    N = L * L
-    checked, passed = 0, 0
-    for _ in range(num_samples):
-        bits = rng.integers(0, 2, size=N)
-        s_idx = sum(int(b) << (N - 1 - i) for i, b in enumerate(bits))
-        gamma_s = phase_fn(s_idx)
-        for r in range(L - 1):
-            for c in range(L):
-                if bits[r * L + c] == bits[(r + 1) * L + c]:
-                    continue
-                s_prime_idx = s_idx ^ (1 << (N - 1 - r * L - c)) ^ (1 << (N - 1 - (r + 1) * L - c))
-                gamma_s_prime = phase_fn(s_prime_idx)
-                between = sites_between(r, c, r + 1, L)
-                P = 0
-                for site_snake in between:
-                    sr, sc = snake_to_rc(site_snake, L)
-                    P ^= int(bits[sr * L + sc])
-                expected = (-1) ** P
-                actual = gamma_s * gamma_s_prime
-                checked += 1
-                if abs(actual - expected) < 1e-6:
-                    passed += 1
-    return checked, passed
-
+# ===================================================================
+# 4. Diagonal property: Gamma preserves bit values
+# ===================================================================
 
 @pytest.mark.parametrize("L", [3, 5, 7])
 def test_gamma_is_diagonal(L):
-    """All Gamma constructions must be diagonal (preserve bit values, only apply phases)."""
+    """All Gamma constructions preserve bit values (only apply phases).
+
+    For the ancilla variant this also checks ancillas return to |0>.
+    """
     builders = [
         ("ancilla", lambda: build_gamma_with_ancillas(L)),
         ("primitive", lambda: build_gamma_ancilla_free(L)),
@@ -239,6 +236,73 @@ def test_gamma_is_diagonal(L):
             )
 
 
+# ===================================================================
+# 5. Ancilla disentanglement (dedicated, more thorough)
+# ===================================================================
+
+@pytest.mark.parametrize("L", [3, 5, 7, 9])
+def test_ancilla_disentanglement(L):
+    """Ancillas start at |0> and return to |0> for many random basis states.
+
+    Tests 500 states per L (more than the 200 in test_gamma_is_diagonal).
+    """
+    circ, sys_list, anc_list = build_gamma_with_ancillas(L)
+    N = L * L
+    n_anc = len(anc_list)
+    all_qubits = sys_list + anc_list
+    q2i = {q: i for i, q in enumerate(all_qubits)}
+    n = len(all_qubits)
+    all_ops = [op for moment in circ for op in moment]
+
+    rng = np.random.default_rng(42 + L)
+    for _ in range(500):
+        bits_sys = rng.integers(0, 2, size=N).tolist()
+        bits = bits_sys + [0] * n_anc
+        _, final_bits = classical_sim_phase(all_ops, q2i, n, bits)
+        for i in range(n_anc):
+            assert final_bits[N + i] == 0, (
+                f"L={L}: ancilla {i} not |0> after Gamma "
+                f"(input sys bits={bits_sys})"
+            )
+
+
+# ===================================================================
+# 6. Property (*) verification
+# ===================================================================
+
+def verify_property_star(phase_fn, L, num_samples=200, seed=42):
+    """Verify property (*) on sampled basis states.
+
+    For every vertical grid-neighbor pair (r,c)<->(r+1,c) with JWT indices j<k:
+        gamma_s * gamma_s' = (-1)^{sum of bits between j and k}
+    where s,s' differ only at j,k with s_j + s_k = 1.
+    """
+    rng = np.random.default_rng(seed)
+    N = L * L
+    checked, passed = 0, 0
+    for _ in range(num_samples):
+        bits = rng.integers(0, 2, size=N)
+        s_idx = sum(int(b) << (N - 1 - i) for i, b in enumerate(bits))
+        gamma_s = phase_fn(s_idx)
+        for r in range(L - 1):
+            for c in range(L):
+                if bits[r * L + c] == bits[(r + 1) * L + c]:
+                    continue
+                s_prime_idx = s_idx ^ (1 << (N - 1 - r * L - c)) ^ (1 << (N - 1 - (r + 1) * L - c))
+                gamma_s_prime = phase_fn(s_prime_idx)
+                between = sites_between(r, c, r + 1, L)
+                P = 0
+                for site_snake in between:
+                    sr, sc = snake_to_rc(site_snake, L)
+                    P ^= int(bits[sr * L + sc])
+                expected = (-1) ** P
+                actual = gamma_s * gamma_s_prime
+                checked += 1
+                if abs(actual - expected) < 1e-6:
+                    passed += 1
+    return checked, passed
+
+
 @pytest.mark.parametrize("L", [3, 5, 7])
 def test_property_star_all_constructions(L):
     """Property (*) holds for all three Gamma constructions."""
@@ -251,6 +315,67 @@ def test_property_star_all_constructions(L):
         ("primitive", lambda s: get_phase_ancilla_free(c2, sys2, s)),
         ("pipelined", lambda s: get_phase_ancilla_free(c3, sys3, s)),
     ]:
-        checked, passed = verify_property_star(phase_fn, L, num_samples=200, seed=42 + L)
+        checked, passed = verify_property_star(phase_fn, L, num_samples=300, seed=42 + L)
         assert checked > 0, f"L={L}, {name}: no states checked"
         assert passed == checked, f"L={L}, {name}: {passed}/{checked} passed"
+
+
+# ===================================================================
+# 7. Gate type inventory: only CNOT, CZ, Z gates in Gamma circuits
+# ===================================================================
+
+@pytest.mark.parametrize("L", [5, 7])
+def test_gamma_only_clifford_gates(L):
+    """Gamma circuits contain only CNOT, CZ, and Z gates."""
+    allowed = (
+        cirq.ops.common_gates.CNotPowGate,
+        cirq.ops.common_gates.CZPowGate,
+        cirq.ops.common_gates.ZPowGate,
+    )
+    for name, builder in [
+        ("ancilla", lambda: build_gamma_with_ancillas(L)),
+        ("primitive", lambda: build_gamma_ancilla_free(L)),
+        ("pipelined", lambda: build_gamma_pipelined(L)),
+    ]:
+        result = builder()
+        circ = result[0]
+        for moment in circ:
+            for op in moment:
+                assert isinstance(op.gate, allowed), (
+                    f"{name} L={L}: unexpected gate type {type(op.gate).__name__}: {op}"
+                )
+                if hasattr(op.gate, "exponent"):
+                    assert op.gate.exponent == 1, (
+                        f"{name} L={L}: non-unit exponent {op.gate.exponent}: {op}"
+                    )
+
+
+# ===================================================================
+# 8. Larger L depth checks (spot-check exact formulas at scale)
+# ===================================================================
+
+@pytest.mark.parametrize("L", [25, 30])
+def test_gamma_ancilla_depth_large(L):
+    """Spot-check ancilla Gamma depth = 13L + 4 at larger L."""
+    circ, _, _ = build_gamma_with_ancillas(L)
+    expected = 13 * L + 4
+    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+
+
+@pytest.mark.parametrize("L", [25, 30])
+def test_gamma_primitive_depth_large(L):
+    """Spot-check primitive Gamma depth = 12L + 8 at larger L."""
+    circ, _ = build_gamma_ancilla_free(L)
+    expected = 12 * L + 8
+    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+
+
+@pytest.mark.parametrize("L", [25, 30])
+def test_gamma_pipelined_depth_large(L):
+    """Spot-check pipelined Gamma depth at larger L."""
+    circ, _ = build_gamma_pipelined(L)
+    if L % 2 == 1:
+        expected = 8 * L + 9
+    else:
+        expected = 8 * L + 10
+    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"

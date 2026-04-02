@@ -4,33 +4,33 @@ Ancillas at GridQubit(r, L) sweep left (Stage B) and right (Stage D)
 via advance primitives.  All gates are nearest-neighbor on the
 (L+1)-column physical grid.
 
-Stages:
-    A: Column parity cascade on data columns 0..L-1       (L-1 depth)
-    B: Leftward sweep with parity-basis CZ gates           (~8L depth)
-    C: Undo column parity (displaced cols) + ancilla       (L-1 depth)
-       cascade at column 0
-    D: Rightward sweep with original-basis CZ gates        (~3L depth)
-    Diagonal correction: vertical CZ per even-odd row pair (1 depth)
+Depth scaling
+-------------
+Without cross-step pipelining (step-separated construction):
+    Stage A:  L - 1     (column parity cascade)
+    Stage B:  10L       (leftward sweep, 10 per step)
+    Stage C:  L - 1     (undo column parity + ancilla cascade)
+    Stage D:  6L + 1    (rightward sweep, 6 per step, + diagonal correction)
+    Total:    18L - 1   (exact for L >= 7)
 
-After the circuit, data qubits return to columns 0..L-1 and ancillas
-return to column L.  Ancillas start and end in |0>.
+With cirq greedy pipelining (this implementation):
+    Total:    13L + 4   (exact for L >= 7)
 
-Depth per Gamma: ~13L (exact for large L).
+    The ops within each column step are emitted in logical order (substeps
+    1->2->3), but all steps are fed to one cirq.Circuit() call, allowing
+    cirq to merge the tail of step p with the head of step p+1 when they
+    touch disjoint qubits.  Savings breakdown:
 
-Cross-step pipelining (achieved by cirq's greedy scheduler):
-  The ops within each column step are emitted in logical order (substeps
-  1→2→3), but all steps are fed to one cirq.Circuit() call, allowing
-  cirq to merge the tail of step p with the head of step p+1 when they
-  touch disjoint qubits.
+    Stage B (~2 saved/step, 10 -> ~8):
+      Substep 3 of step p (batch A + odd advance) overlaps with substep 1
+      of step p-1 (batch B SWAP), since they operate on disjoint row groups.
 
-  Stage B savings (~2/step, 10 → ~8):
-    Substep 3 of step p (batch A + odd advance) overlaps with substep 1
-    of step p-1 (batch B SWAP), since they operate on disjoint row groups.
+    Stage D (~3 saved/step, 6 -> ~3):
+      Substep 3 of step p (odd advance) fully overlaps with substep 1 of
+      step p+1 (even advance), since even and odd rows are disjoint.
+      CZ gates also pack into advance moments on non-conflicting qubits.
 
-  Stage D savings (~3/step, 6 → ~3):
-    Substep 3 of step p (odd advance) fully overlaps with substep 1 of
-    step p+1 (even advance), since even and odd rows are disjoint.
-    CZ gates also pack into advance moments on non-conflicting qubits.
+Ancillas start and end in |0>.  Data qubits return to columns 0..L-1.
 """
 
 from typing import Dict, List, Tuple
