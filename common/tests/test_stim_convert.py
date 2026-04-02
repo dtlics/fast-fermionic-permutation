@@ -5,7 +5,7 @@ import pytest
 
 from common.fp_1d import build_fp_1d, build_benchmark_permutation
 from common.fp_2d import GammaMethod, build_fp_2d
-from common.stim_convert import pennylane as qp_to_stim_circuit, simulate_clifford_fidelity
+from common.stim_convert import qp_to_stim_circuit, simulate_clifford_fidelity
 
 
 # ---------------------------------------------------------------------------
