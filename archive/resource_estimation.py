@@ -15,24 +15,26 @@ import time
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
+from common.oet_sort import FSWAP
+from common.stim_convert import FSwapPowGate
+
 # Keep matplotlib cache writable in sandboxed environments.
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
-import cirq
+import pennylane as qp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from openfermion.circuits.gates import FSWAP, FSwapPowGate
 
 from visualize_fermionic import CompressedFermionicPermutation, GridTopology, decompose_permutation
 
-LinearPermutationGate = cirq.contrib.acquaintance.permutation.LinearPermutationGate
+LinearPermutationGate = qp.contrib.acquaintance.permutation.LinearPermutationGate
 
 MethodName = Literal["baseline_openfermion_snake", "custom_ancilla_row_cnot"]
 PermutationKind = Literal["random", "transpose", "reverse", "identity"]
 PlotMetric = Literal["success_probability", "error_sum_total", "weighted_count_metric"]
 
-_FSWAP_SYNTH_TEMPLATE_OPS: Optional[Tuple[cirq.Operation, ...]] = None
+_FSWAP_SYNTH_TEMPLATE_OPS: Optional[Tuple[qp.ops.Operation, ...]] = None
 CACHE_PATH_ENV_VAR = "FFP_CACHE_CSV_PATH"
 DEFAULT_CACHE_CSV_PATH = Path(__file__).resolve().with_name("resource_estimation_cache.csv")
 
@@ -99,16 +101,16 @@ def build_benchmark_permutation(
     raise ValueError(f"Unsupported permutation kind: {kind}")
 
 
-def build_openfermion_baseline_circuit(L: int, perm_raster: Sequence[int]) -> cirq.Circuit:
+def build_openfermion_baseline_circuit(L: int, perm_raster: Sequence[int]) -> qp.tape.qscript.QuantumScript:
     n = L * L
     validate_permutation(perm_raster, n)
     perm_snake = raster_perm_to_snake(L, perm_raster)
-    q = cirq.LineQubit.range(n)
+    q = qp.LineQubit.range(n)
     op = LinearPermutationGate(n, {i: perm_snake[i] for i in range(n)}, FSWAP).on(*q)
-    return cirq.Circuit(op)
+    return qp.tape.qscript.QuantumScript(op)
 
 
-def _middle_row_ancilla(program: CompressedFermionicPermutation, q0: cirq.Qid, q1: cirq.Qid) -> cirq.Qid:
+def _middle_row_ancilla(program: CompressedFermionicPermutation, q0: str, q1: str) -> str:
     pos = {q: (r, c) for (r, c), q in program.topo.data_map.items()}
     if q0 not in pos or q1 not in pos:
         raise ValueError("Row-stage ancilla routing expects data qubits.")
@@ -124,20 +126,20 @@ def _middle_row_ancilla(program: CompressedFermionicPermutation, q0: cirq.Qid, q
 
 
 def _compile_cnot_via_middle_ancilla(
-    program: CompressedFermionicPermutation, control: cirq.Qid, target: cirq.Qid
-) -> List[cirq.Operation]:
+    program: CompressedFermionicPermutation, control: str, target: str
+) -> List[qp.ops.Operation]:
     anc = _middle_row_ancilla(program, control, target)
     return [
-        cirq.reset(anc),
-        cirq.CNOT(control, anc),
-        cirq.CNOT(anc, target),
-        cirq.CNOT(control, anc),
+        qp.reset(anc),
+        qp.CNOT(control, anc),
+        qp.CNOT(anc, target),
+        qp.CNOT(control, anc),
     ]
 
 
 def _canonical_pair(
-    q0: cirq.Qid, q1: cirq.Qid, data_index: Dict[cirq.Qid, int]
-) -> Tuple[cirq.Qid, cirq.Qid]:
+    q0: str, q1: str, data_index: Dict[str, int]
+) -> Tuple[str, str]:
     i0 = data_index.get(q0)
     i1 = data_index.get(q1)
     if i0 is not None and i1 is not None:
@@ -146,12 +148,12 @@ def _canonical_pair(
 
 
 def _split_cz_edges_two_rounds(
-    edges: Sequence[Tuple[cirq.Qid, cirq.Qid]],
-) -> Optional[List[List[Tuple[cirq.Qid, cirq.Qid]]]]:
+    edges: Sequence[Tuple[str, str]],
+) -> Optional[List[List[Tuple[str, str]]]]:
     if not edges:
         return [[], []]
 
-    incident: Dict[cirq.Qid, List[int]] = {}
+    incident: Dict[str, List[int]] = {}
     for idx, (q0, q1) in enumerate(edges):
         incident.setdefault(q0, []).append(idx)
         incident.setdefault(q1, []).append(idx)
@@ -186,7 +188,7 @@ def _split_cz_edges_two_rounds(
     if not feasible:
         return None
 
-    rounds: List[List[Tuple[cirq.Qid, cirq.Qid]]] = [[], []]
+    rounds: List[List[Tuple[str, str]]] = [[], []]
     for idx, edge in enumerate(edges):
         rounds[color[idx]].append(edge)
     return rounds
@@ -194,10 +196,10 @@ def _split_cz_edges_two_rounds(
 
 def _compile_horizontal_cz_via_middle_ancilla(
     program: CompressedFermionicPermutation,
-    q0: cirq.Qid,
-    q1: cirq.Qid,
-    data_pos: Dict[cirq.Qid, Tuple[int, int]],
-) -> Tuple[cirq.Operation, cirq.Operation, cirq.Operation, cirq.Qid]:
+    q0: str,
+    q1: str,
+    data_pos: Dict[str, Tuple[int, int]],
+) -> Tuple[qp.ops.Operation, qp.ops.Operation, qp.ops.Operation, str]:
     r0, c0 = data_pos[q0]
     r1, c1 = data_pos[q1]
     if r0 != r1 or abs(c0 - c1) != 1:
@@ -208,23 +210,23 @@ def _compile_horizontal_cz_via_middle_ancilla(
     else:
         left, right = q1, q0
     anc = program.topo.ancilla_map[(r0, min(c0, c1))]
-    return cirq.CNOT(left, anc), cirq.CZ(anc, right), cirq.CNOT(left, anc), anc
+    return qp.CNOT(left, anc), qp.CZ(anc, right), qp.CNOT(left, anc), anc
 
 
 def _build_phase_correction_moments(
     program: CompressedFermionicPermutation, active_swaps: Dict[int, List[int]], round_parity: int
-) -> List[cirq.Moment]:
+) -> List[qp.Moment]:
     data_pos = {q: (r, c) for (r, c), q in program.topo.data_map.items()}
     data_index = {q: i for i, q in enumerate(program.topo.data_qubits)}
 
-    cz_counts: Dict[Tuple[cirq.Qid, cirq.Qid], int] = {}
-    z_counts: Dict[cirq.Qid, int] = {}
+    cz_counts: Dict[Tuple[str, str], int] = {}
+    z_counts: Dict[str, int] = {}
 
-    def add_cz(a: cirq.Qid, b: cirq.Qid) -> None:
+    def add_cz(a: str, b: str) -> None:
         key = _canonical_pair(a, b, data_index)
         cz_counts[key] = cz_counts.get(key, 0) + 1
 
-    def add_z(q: cirq.Qid) -> None:
+    def add_z(q: str) -> None:
         z_counts[q] = z_counts.get(q, 0) + 1
 
     for c in range(program.L):
@@ -252,7 +254,7 @@ def _build_phase_correction_moments(
             if tr is not None and br is not None:
                 add_cz(tr, br)
 
-    z_ops = [cirq.Z(q) for q, count in z_counts.items() if count % 2 == 1]
+    z_ops = [qp.Z(q) for q, count in z_counts.items() if count % 2 == 1]
     cz_edges = [edge for edge, count in cz_counts.items() if count % 2 == 1]
 
     rounds = _split_cz_edges_two_rounds(cz_edges)
@@ -266,46 +268,46 @@ def _build_phase_correction_moments(
         if r0 == r1 and abs(c0 - c1) == 1:
             used_horizontal_ancillas.append(program.topo.ancilla_map[(r0, min(c0, c1))])
 
-    moments: List[cirq.Moment] = []
+    moments: List[qp.Moment] = []
     if used_horizontal_ancillas:
-        moments.append(cirq.Moment([cirq.reset(a) for a in used_horizontal_ancillas]))
+        moments.append(qp.Moment([qp.reset(a) for a in used_horizontal_ancillas]))
     if z_ops:
-        moments.append(cirq.Moment(z_ops))
+        moments.append(qp.Moment(z_ops))
 
     for edges_in_round in rounds:
-        direct_vertical_ops: List[cirq.Operation] = []
-        h_cnot_1_ops: List[cirq.Operation] = []
-        h_mid_ops: List[cirq.Operation] = []
-        h_cnot_2_ops: List[cirq.Operation] = []
-        direct_other_ops: List[cirq.Operation] = []
+        direct_vertical_ops: List[qp.ops.Operation] = []
+        h_cnot_1_ops: List[qp.ops.Operation] = []
+        h_mid_ops: List[qp.ops.Operation] = []
+        h_cnot_2_ops: List[qp.ops.Operation] = []
+        direct_other_ops: List[qp.ops.Operation] = []
 
         for q0, q1 in edges_in_round:
             p0 = data_pos.get(q0)
             p1 = data_pos.get(q1)
             if p0 is None or p1 is None:
-                direct_other_ops.append(cirq.CZ(q0, q1))
+                direct_other_ops.append(qp.CZ(q0, q1))
                 continue
             r0, c0 = p0
             r1, c1 = p1
             if c0 == c1:
-                direct_vertical_ops.append(cirq.CZ(q0, q1))
+                direct_vertical_ops.append(qp.CZ(q0, q1))
             elif r0 == r1 and abs(c0 - c1) == 1:
                 cnot_1, mid, cnot_2, _ = _compile_horizontal_cz_via_middle_ancilla(program, q0, q1, data_pos)
                 h_cnot_1_ops.append(cnot_1)
                 h_mid_ops.append(mid)
                 h_cnot_2_ops.append(cnot_2)
             else:
-                direct_other_ops.append(cirq.CZ(q0, q1))
+                direct_other_ops.append(qp.CZ(q0, q1))
 
         if h_cnot_1_ops:
-            moments.append(cirq.Moment(h_cnot_1_ops))
+            moments.append(qp.Moment(h_cnot_1_ops))
 
         mid_ops = direct_vertical_ops + h_mid_ops + direct_other_ops
         if mid_ops:
-            moments.append(cirq.Moment(mid_ops))
+            moments.append(qp.Moment(mid_ops))
 
         if h_cnot_2_ops:
-            moments.append(cirq.Moment(h_cnot_2_ops))
+            moments.append(qp.Moment(h_cnot_2_ops))
 
     return moments
 
@@ -325,96 +327,96 @@ def _is_odd_exponent(exponent: float) -> bool:
     return np.isclose(_exp_mod_2(exponent), 1.0, atol=1e-9)
 
 
-def _strip_operation_wrappers(op: cirq.Operation) -> cirq.Operation:
+def _strip_operation_wrappers(op: qp.ops.Operation) -> qp.ops.Operation:
     unwrapped = op
     while True:
-        if isinstance(unwrapped, cirq.TaggedOperation):
+        if isinstance(unwrapped, qp.TaggedOperation):
             unwrapped = unwrapped.sub_operation
             continue
-        if isinstance(unwrapped, cirq.ClassicallyControlledOperation):
+        if isinstance(unwrapped, qp.ClassicallyControlledOperation):
             unwrapped = unwrapped.without_classical_controls()
             continue
         return unwrapped
 
 
-def _synthesize_fswap_template_ops() -> Tuple[cirq.Operation, ...]:
+def _synthesize_fswap_template_ops() -> Tuple[qp.ops.Operation, ...]:
     global _FSWAP_SYNTH_TEMPLATE_OPS
     if _FSWAP_SYNTH_TEMPLATE_OPS is not None:
         return _FSWAP_SYNTH_TEMPLATE_OPS
 
-    q0, q1 = cirq.LineQubit.range(2)
+    q0, q1 = qp.LineQubit.range(2)
     # Direct 2-CNOT Clifford decomposition (no CZ intermediary).
-    template_ops: List[cirq.Operation] = [
-        cirq.H(q1),
-        cirq.CNOT(q1, q0),
-        cirq.H(q0),
-        cirq.H(q1),
-        cirq.CNOT(q1, q0),
-        cirq.H(q1),
+    template_ops: List[qp.ops.Operation] = [
+        qp.H(q1),
+        qp.CNOT(q1, q0),
+        qp.H(q0),
+        qp.H(q1),
+        qp.CNOT(q1, q0),
+        qp.H(q1),
     ]
 
-    target_u = cirq.unitary(FSWAP(q0, q1))
-    synth_u = cirq.unitary(cirq.Circuit(template_ops))
-    if not cirq.linalg.allclose_up_to_global_phase(target_u, synth_u, atol=1e-8):
+    target_u = qp.unitary(FSWAP(q0, q1))
+    synth_u = qp.unitary(qp.tape.qscript.QuantumScript(template_ops))
+    if not qp.linalg.allclose_up_to_global_phase(target_u, synth_u, atol=1e-8):
         raise ValueError("Synthesized FSWAP decomposition is not unitary-equivalent.")
 
     _FSWAP_SYNTH_TEMPLATE_OPS = tuple(template_ops)
     return _FSWAP_SYNTH_TEMPLATE_OPS
 
 
-def _lower_fswap_to_common(op: cirq.Operation) -> List[cirq.Operation]:
-    if len(op.qubits) != 2:
+def _lower_fswap_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
+    if len(op.wires) != 2:
         raise ValueError("FSWAP must act on exactly two qubits.")
-    a, b = op.qubits
-    q_map = {cirq.LineQubit(0): a, cirq.LineQubit(1): b}
+    a, b = op.wires
+    q_map = {qp.LineQubit(0): a, qp.LineQubit(1): b}
 
-    lowered: List[cirq.Operation] = []
+    lowered: List[qp.ops.Operation] = []
     for template_op in _synthesize_fswap_template_ops():
-        mapped = template_op.with_qubits(*(q_map[q] for q in template_op.qubits))
+        mapped = template_op.with_qubits(*(q_map[q] for q in template_op.wires))
         lowered.extend(_lower_operation_to_common(mapped))
     return lowered
 
 
-def _lower_swap_to_common(op: cirq.Operation) -> List[cirq.Operation]:
-    if len(op.qubits) != 2:
+def _lower_swap_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
+    if len(op.wires) != 2:
         raise ValueError("SWAP must act on exactly two qubits.")
-    a, b = op.qubits
-    return [cirq.CNOT(a, b), cirq.CNOT(b, a), cirq.CNOT(a, b)]
+    a, b = op.wires
+    return [qp.CNOT(a, b), qp.CNOT(b, a), qp.CNOT(a, b)]
 
 
-def _lower_cz_to_common(op: cirq.Operation) -> List[cirq.Operation]:
-    if len(op.qubits) != 2:
+def _lower_cz_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
+    if len(op.wires) != 2:
         raise ValueError("CZ must act on exactly two qubits.")
-    control, target = op.qubits
-    return [cirq.H(target), cirq.CNOT(control, target), cirq.H(target)]
+    control, target = op.wires
+    return [qp.H(target), qp.CNOT(control, target), qp.H(target)]
 
 
-def _lower_operation_to_common(op: cirq.Operation) -> List[cirq.Operation]:
+def _lower_operation_to_common(op: qp.ops.Operation) -> List[qp.ops.Operation]:
     op = _strip_operation_wrappers(op)
     gate = op.gate
     if gate is None:
         return []
 
-    if isinstance(gate, (cirq.MeasurementGate, cirq.ResetChannel)):
+    if isinstance(gate, (qp.MeasurementGate, qp.ResetChannel)):
         return [op]
 
-    if isinstance(gate, (cirq.HPowGate, cirq.XPowGate, cirq.YPowGate, cirq.ZPowGate)):
+    if isinstance(gate, (qp.HPowGate, qp.XPowGate, qp.YPowGate, qp.ZPowGate)):
         return [] if _is_identity_exponent(gate.exponent) else [op]
 
-    if isinstance(gate, cirq.CNotPowGate):
+    if isinstance(gate, qp.CNotPowGate):
         return [] if _is_identity_exponent(gate.exponent) else [op]
 
-    if isinstance(gate, cirq.CZPowGate):
+    if isinstance(gate, qp.CZPowGate):
         if _is_identity_exponent(gate.exponent):
             return []
         if not _is_odd_exponent(gate.exponent):
             raise ValueError(f"Unsupported CZ exponent for counting: {gate.exponent}")
-        lowered: List[cirq.Operation] = []
+        lowered: List[qp.ops.Operation] = []
         for sub_op in _lower_cz_to_common(op):
             lowered.extend(_lower_operation_to_common(sub_op))
         return lowered
 
-    if isinstance(gate, cirq.SwapPowGate):
+    if isinstance(gate, qp.SwapPowGate):
         if _is_identity_exponent(gate.exponent):
             return []
         if not _is_odd_exponent(gate.exponent):
@@ -429,12 +431,12 @@ def _lower_operation_to_common(op: cirq.Operation) -> List[cirq.Operation]:
         return _lower_fswap_to_common(op)
 
     if isinstance(gate, LinearPermutationGate):
-        lowered: List[cirq.Operation] = []
-        for sub_op in cirq.decompose(op):
+        lowered: List[qp.ops.Operation] = []
+        for sub_op in qp.decompose(op):
             lowered.extend(_lower_operation_to_common(sub_op))
         return lowered
 
-    decomposed = cirq.decompose_once(op, default=None)
+    decomposed = qp.decompose_once(op, default=None)
     if decomposed is None:
         raise ValueError(f"Unable to lower operation to common gateset: {op!r}")
 
@@ -444,18 +446,18 @@ def _lower_operation_to_common(op: cirq.Operation) -> List[cirq.Operation]:
     return lowered
 
 
-def lower_circuit_to_common_gates(circuit: cirq.Circuit) -> cirq.Circuit:
-    lowered_ops: List[cirq.Operation] = []
+def lower_circuit_to_common_gates(circuit: qp.tape.qscript.QuantumScript) -> qp.tape.qscript.QuantumScript:
+    lowered_ops: List[qp.ops.Operation] = []
     for op in circuit.all_operations():
         lowered_ops.extend(_lower_operation_to_common(op))
-    return cirq.Circuit(lowered_ops)
+    return qp.tape.qscript.QuantumScript(lowered_ops)
 
 
-def _build_custom_circuit_with_row_routing(L: int, perm_raster: Sequence[int]) -> cirq.Circuit:
+def _build_custom_circuit_with_row_routing(L: int, perm_raster: Sequence[int]) -> qp.tape.qscript.QuantumScript:
     validate_permutation(perm_raster, L * L)
     program = CompressedFermionicPermutation(L, topology=GridTopology(L))
     s1, s2, s3 = decompose_permutation(L, perm_raster)
-    moments: List[cirq.Moment] = []
+    moments: List[qp.Moment] = []
 
     def append_col_stage(schedule: Dict[int, List[int]]) -> None:
         cur_perms = {c: list(schedule[c]) for c in range(L)}
@@ -494,22 +496,22 @@ def _build_custom_circuit_with_row_routing(L: int, perm_raster: Sequence[int]) -
         row_perm = {i: s2[r][i] for i in range(L)}
         row_op = LinearPermutationGate(L, row_perm, FSWAP).on(*row_qs)
 
-        routed_row_ops: List[cirq.Operation] = []
-        for fswap_op in cirq.decompose(row_op):
+        routed_row_ops: List[qp.ops.Operation] = []
+        for fswap_op in qp.decompose(row_op):
             primitive_ops = _lower_operation_to_common(fswap_op)
             for primitive in primitive_ops:
                 primitive_gate = primitive.gate
-                if isinstance(primitive_gate, cirq.CNotPowGate):
+                if isinstance(primitive_gate, qp.CNotPowGate):
                     routed_row_ops.extend(_compile_cnot_via_middle_ancilla(program, *primitive.qubits))
                 else:
                     routed_row_ops.append(primitive)
-        moments.extend(cirq.Circuit(routed_row_ops).moments)
+        moments.extend(qp.tape.qscript.QuantumScript(routed_row_ops).moments)
 
     append_col_stage(s3)
-    return cirq.Circuit(moments)
+    return qp.tape.qscript.QuantumScript(moments)
 
 
-def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
+def count_common_gates(circuit: qp.tape.qscript.QuantumScript) -> Dict[str, int]:
     counts = {
         "H": 0,
         "S": 0,
@@ -531,17 +533,17 @@ def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
         if gate is None:
             continue
 
-        n_qubits = len(op.qubits)
+        n_qubits = len(op.wires)
 
-        if isinstance(gate, cirq.MeasurementGate):
+        if isinstance(gate, qp.MeasurementGate):
             counts["MEASURE"] += n_qubits
             continue
 
-        if isinstance(gate, cirq.ResetChannel):
+        if isinstance(gate, qp.ResetChannel):
             counts["RESET"] += n_qubits
             continue
 
-        if isinstance(gate, cirq.CNotPowGate):
+        if isinstance(gate, qp.CNotPowGate):
             if _is_identity_exponent(gate.exponent):
                 continue
             if _is_odd_exponent(gate.exponent):
@@ -550,7 +552,7 @@ def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
                 counts["OTHER_2Q"] += 1
             continue
 
-        if isinstance(gate, cirq.CZPowGate):
+        if isinstance(gate, qp.CZPowGate):
             if _is_identity_exponent(gate.exponent):
                 continue
             if _is_odd_exponent(gate.exponent):
@@ -559,7 +561,7 @@ def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
                 counts["OTHER_2Q"] += 1
             continue
 
-        if isinstance(gate, cirq.HPowGate):
+        if isinstance(gate, qp.HPowGate):
             if _is_identity_exponent(gate.exponent):
                 continue
             if _is_odd_exponent(gate.exponent):
@@ -568,7 +570,7 @@ def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
                 counts["OTHER_1Q"] += n_qubits
             continue
 
-        if isinstance(gate, cirq.XPowGate):
+        if isinstance(gate, qp.XPowGate):
             if _is_identity_exponent(gate.exponent):
                 continue
             if _is_odd_exponent(gate.exponent):
@@ -577,7 +579,7 @@ def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
                 counts["OTHER_1Q"] += n_qubits
             continue
 
-        if isinstance(gate, cirq.YPowGate):
+        if isinstance(gate, qp.YPowGate):
             if _is_identity_exponent(gate.exponent):
                 continue
             if _is_odd_exponent(gate.exponent):
@@ -586,7 +588,7 @@ def count_common_gates(circuit: cirq.Circuit) -> Dict[str, int]:
                 counts["OTHER_1Q"] += n_qubits
             continue
 
-        if isinstance(gate, cirq.ZPowGate):
+        if isinstance(gate, qp.ZPowGate):
             mod = _exp_mod_2(gate.exponent)
             if np.isclose(mod, 0.0, atol=1e-9):
                 continue

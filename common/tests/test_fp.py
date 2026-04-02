@@ -12,8 +12,7 @@ Verifies:
 
 import numpy as np
 import pytest
-import cirq
-from openfermion.circuits.gates import FSWAP
+import pennylane as qp
 
 from common.grid import validate_permutation
 from common.hall_decomposition import decompose_permutation_rcr
@@ -33,11 +32,11 @@ def test_fswap_oet_sort():
     for n in [3, 4, 5, 6]:
         for _ in range(10):
             perm = rng.permutation(n).tolist()
-            qubits = cirq.LineQubit.range(n)
+            qubits = qp.LineQubit.range(n)
             ops = fswap_odd_even_sort_ops(list(qubits), perm)
             check = list(perm)
             for op in ops:
-                q0, q1 = op.qubits
+                q0, q1 = op.wires
                 i, j = list(qubits).index(q0), list(qubits).index(q1)
                 assert abs(i - j) == 1
                 check[i], check[j] = check[j], check[i]
@@ -81,7 +80,7 @@ def test_fp_2d_returns_fp_result(gamma_method):
     result = build_fp_2d(L, perm, gamma_method)
 
     assert isinstance(result, FPResult)
-    assert isinstance(result.circuit, cirq.Circuit)
+    assert isinstance(result.circuit, qp.tape.qscript.QuantumScript)
     assert isinstance(result.sys_qubits, list)
     assert isinstance(result.anc_qubits, list)  # always a list, never None
     assert len(result.sys_qubits) == L * L
@@ -116,8 +115,8 @@ def test_end_to_end_all_baselines(L):
     """All 4 baselines produce the same density matrix for L=3."""
     rng = np.random.default_rng(42)
     N = L * L
-    sim = cirq.Simulator()
-    canonical_qubits = [cirq.GridQubit(r, c) for r in range(L) for c in range(L)]
+    sim = qp.Simulator()
+    canonical_qubits = [qp.wires.Wires(r, c) for r in range(L) for c in range(L)]
 
     perms = list(structured_permutations(L).items())
     perms.append(("random_0", rng.permutation(N).tolist()))
@@ -130,7 +129,7 @@ def test_end_to_end_all_baselines(L):
 
         # Baseline 1: 1D
         res_1d = build_fp_1d(L, perm)
-        circ_1d_full = res_1d.circuit + cirq.Circuit([cirq.I(q) for q in canonical_qubits])
+        circ_1d_full = res_1d.circuit + qp.tape.qscript.QuantumScript([qp.I(q) for q in canonical_qubits])
         result_1d = sim.simulate(circ_1d_full, qubit_order=canonical_qubits,
                                  initial_state=init_state.copy())
         dm_1d = np.outer(result_1d.final_state_vector,
@@ -138,7 +137,7 @@ def test_end_to_end_all_baselines(L):
 
         # Baseline 3: Ancilla-free primitive
         res_3 = build_fp_2d(L, perm, GammaMethod.PRIMITIVE)
-        circ_3_full = res_3.circuit + cirq.Circuit([cirq.I(q) for q in canonical_qubits])
+        circ_3_full = res_3.circuit + qp.tape.qscript.QuantumScript([qp.I(q) for q in canonical_qubits])
         result_3 = sim.simulate(circ_3_full, qubit_order=canonical_qubits,
                                 initial_state=init_state.copy())
         dm_3 = np.outer(result_3.final_state_vector,
@@ -146,7 +145,7 @@ def test_end_to_end_all_baselines(L):
 
         # Baseline 4: Pipelined
         res_4 = build_fp_2d(L, perm, GammaMethod.PIPELINED)
-        circ_4_full = res_4.circuit + cirq.Circuit([cirq.I(q) for q in canonical_qubits])
+        circ_4_full = res_4.circuit + qp.tape.qscript.QuantumScript([qp.I(q) for q in canonical_qubits])
         result_4 = sim.simulate(circ_4_full, qubit_order=canonical_qubits,
                                 initial_state=init_state.copy())
         dm_4 = np.outer(result_4.final_state_vector,
@@ -161,12 +160,12 @@ def test_end_to_end_all_baselines(L):
         idx_2 = sum(bits_2[i] << (n_total - 1 - i) for i in range(n_total))
         init_state_2 = np.zeros(2**n_total, dtype=complex)
         init_state_2[idx_2] = 1.0
-        circ_2_full = res_2.circuit + cirq.Circuit([cirq.I(q) for q in all_qubits_2])
+        circ_2_full = res_2.circuit + qp.tape.qscript.QuantumScript([qp.I(q) for q in all_qubits_2])
         result_2 = sim.simulate(circ_2_full, qubit_order=all_qubits_2,
                                 initial_state=init_state_2)
         state_2_full = result_2.final_state_vector
         dm_2_full = np.outer(state_2_full, np.conj(state_2_full))
-        dm_2 = cirq.partial_trace(
+        dm_2 = qp.partial_trace(
             dm_2_full.reshape([2] * n_total * 2),
             keep_indices=list(range(N))
         ).reshape(2**N, 2**N)
@@ -193,12 +192,12 @@ def test_ancilla_disentanglement(L):
     """Ancillas start at |0> and return to |0> after the full FP circuit."""
     rng = np.random.default_rng(42 + L)
     N = L * L
-    sim = cirq.Simulator()
+    sim = qp.Simulator()
 
     perm = rng.permutation(N).tolist()
     res = build_fp_2d(L, perm, GammaMethod.ANCILLA)
 
-    canonical_qubits = [cirq.GridQubit(r, c) for r in range(L) for c in range(L)]
+    canonical_qubits = [qp.wires.Wires(r, c) for r in range(L) for c in range(L)]
     anc_sorted = sorted(res.anc_qubits, key=str)
     all_qubits = canonical_qubits + anc_sorted
     n_total = len(all_qubits)
@@ -212,7 +211,7 @@ def test_ancilla_disentanglement(L):
         init_state = np.zeros(2**n_total, dtype=complex)
         init_state[idx] = 1.0
 
-        circ_full = res.circuit + cirq.Circuit([cirq.I(q) for q in all_qubits])
+        circ_full = res.circuit + qp.tape.qscript.QuantumScript([qp.I(q) for q in all_qubits])
         result = sim.simulate(circ_full, qubit_order=all_qubits,
                               initial_state=init_state)
 
@@ -220,7 +219,7 @@ def test_ancilla_disentanglement(L):
         sv = result.final_state_vector
         dm = np.outer(sv, np.conj(sv))
         anc_indices = list(range(N, n_total))
-        anc_dm = cirq.partial_trace(
+        anc_dm = qp.partial_trace(
             dm.reshape([2] * n_total * 2), keep_indices=anc_indices
         ).reshape(2**n_anc, 2**n_anc)
         # If ancillas are in |0...0>, the density matrix is |0><0|

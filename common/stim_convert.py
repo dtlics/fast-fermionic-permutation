@@ -1,4 +1,4 @@
-"""Convert Cirq FP circuits to Stim and run noisy Clifford fidelity simulation.
+"""Convert qp FP circuits to Stim and run noisy Clifford fidelity simulation.
 
 Gate mapping (all gates in these circuits are Clifford):
     FSWAP  -> SWAP + CZ  (treated as one 2-qubit gate for noise)
@@ -18,30 +18,110 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
-import cirq
+import pennylane as qp
 import numpy as np
 import stim
-from openfermion.circuits.gates import FSwapPowGate
+
+from common.oet_sort import FSWAP
+
+
+class CNotPowGate(qp.operation.Operator):
+    num_wires = 2
+    num_params = 1
+
+    def __init__(self, t: float, wires: qp.wires.WiresLike):
+        self.exponent = t
+        super().__init__(t, wires=wires, id=None)
+
+    def compute_matrix(self, t):
+        g = qp.math.exp((1j * np.pi * t) / 2)
+        s = qp.math.sin(np.pi * t / 2)
+        c = qp.math.cos(np.pi * t / 2)
+        return qp.math.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, g*c, -1j*g*s],
+            [0, 0, -1j*g*s, g*c]
+        ])
+
+
+class ZPowGate(qp.operation.Operator):
+    num_wires = 1
+    num_params = 2
+
+    def __init__(self, t: float, s: float, wires: qp.wires.WiresLike):
+        self.exponent = t
+        super().__init__(t, s, wires=wires, id=None)
+
+    def compute_matrix(self, t, s):
+        a = qp.math.exp(1j * np.pi * s * t)
+        b = qp.math.exp(1j * np.pi * t)
+        return a * qp.math.array([
+            [1, 0],
+            [0, b]
+        ])
+
+
+class CZPowGate(qp.operation.Operator):
+    num_wires = 2
+    num_params = 1
+
+    def __init__(self, t: float, wires: qp.wires.WiresLike):
+        self.exponent = t
+        super().__init__(t, wires=wires, id=None)
+
+    def compute_matrix(self, t):
+        g = qp.math.exp(1j * np.pi * t)
+        return qp.math.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, g]
+        ])
+
+
+class FSwapPowGate(qp.operation.Operator):
+    num_wires = 2
+    num_params = 2
+
+    def __init__(self, t: float, s: float, wires: qp.wires.WiresLike):
+        self.exponent = t
+        super().__init__(t, s, wires=wires, id=None)
+
+    def compute_matrix(self, t):
+        p = qp.math.exp(1j * np.pi * t)
+        g = qp.math.exp((1j * np.pi * t) / 2)
+        s = qp.math.sin(np.pi * t / 2)
+        c = qp.math.cos(np.pi * t / 2)
+        return qp.math.array([
+            [1, 0, 0, 0],
+            [0, 0, g*c, -1j*g*s],
+            [0, -1j*g*s, g*c, 0],
+            [0, 0, 0, p]
+        ])
 
 
 # Cache type objects for fast comparison
-_FSWAP_TYPE = FSwapPowGate
-_CNOT_TYPE = cirq.CNotPowGate
-_CZ_TYPE = cirq.CZPowGate
-_Z_TYPE = cirq.ZPowGate
+_CNOT_POW_TYPE = CNotPowGate
+_CNOT_TYPE = qp.CNOT
+_Z_TYPE = ZPowGate
+_CZ_POW_TYPE = CZPowGate
+_CZ_TYPE = qp.CZ
+_FSWAP_POW_TYPE = FSwapPowGate
+_FSWAP_TYPE = FSWAP
 
 
-def cirq_to_stim_circuit(
-    circuit: cirq.Circuit,
-    qubit_order: Sequence[cirq.Qid],
+def qp_to_stim_circuit(
+    circuit: qp.tape.qscript.QuantumScript,
+    qubit_order: Sequence[str],
     p_2q: Optional[float] = None,
     p_idle: Optional[float] = None,
 ) -> stim.Circuit:
-    """Convert a Cirq circuit to a Stim circuit, optionally with noise.
+    """Convert a qp circuit to a Stim circuit, optionally with noise.
 
     Builds the circuit as a string for fast parsing.
     """
-    qmap = {q: i for i, q in enumerate(qubit_order)}
+    qmap = {q.labels[0]: i for i, q in enumerate(qubit_order)}
     n_qubits = len(qubit_order)
     all_indices = set(range(n_qubits))
     add_2q_noise = p_2q is not None and p_2q > 0
@@ -49,7 +129,7 @@ def cirq_to_stim_circuit(
 
     lines = []
 
-    for moment in circuit:
+    for op in circuit:
         swap_t = []
         cz_t = []
         cx_t = []
@@ -58,34 +138,33 @@ def cirq_to_stim_circuit(
         active = set()
         has_2q = False
 
-        for op in moment:
-            gate = op.gate
-            qubits = op.qubits
-            nq = len(qubits)
+        gate = op
+        qubits = op.wires
+        nq = len(qubits)
 
-            if nq == 2:
-                i0 = qmap[qubits[0]]
-                i1 = qmap[qubits[1]]
-                has_2q = True
-                active.add(i0)
-                active.add(i1)
-                noise_t.extend((i0, i1))
+        if nq == 2:
+            i0 = qmap[qubits[0]]
+            i1 = qmap[qubits[1]]
+            has_2q = True
+            active.add(i0)
+            active.add(i1)
+            noise_t.extend((i0, i1))
 
-                gt = type(gate)
-                if gt is _FSWAP_TYPE:
-                    swap_t.extend((i0, i1))
-                    cz_t.extend((i0, i1))
-                elif gt is _CNOT_TYPE:
-                    cx_t.extend((i0, i1))
-                elif gt is _CZ_TYPE:
-                    cz_t.extend((i0, i1))
-                else:
-                    raise ValueError(f"Unsupported 2-qubit gate: {gate}")
+            gt = type(gate)
+            if gt is _FSWAP_TYPE or gt is _FSWAP_POW_TYPE:
+                swap_t.extend((i0, i1))
+                cz_t.extend((i0, i1))
+            elif gt is _CNOT_POW_TYPE or gt is _CNOT_TYPE:
+                cx_t.extend((i0, i1))
+            elif gt is _CZ_POW_TYPE or gt is _CZ_TYPE:
+                cz_t.extend((i0, i1))
+            else:
+                raise ValueError(f"Unsupported 2-qubit gate: {gate}")
 
-            elif nq == 1:
-                i0 = qmap[qubits[0]]
-                if type(gate) is _Z_TYPE and abs(gate.exponent) == 1:
-                    z_t.append(i0)
+        elif nq == 1:
+            i0 = qmap[qubits[0]]
+            if type(gate) is _Z_TYPE and abs(gate.exponent) == 1:
+                z_t.append(i0)
 
         if swap_t:
             lines.append("SWAP " + " ".join(map(str, swap_t)))
@@ -109,8 +188,8 @@ def cirq_to_stim_circuit(
 
 
 def simulate_clifford_fidelity(
-    forward_circuit: cirq.Circuit,
-    qubit_order: Sequence[cirq.Qid],
+    forward_circuit: qp.tape.qscript.QuantumScript,
+    qubit_order: Sequence[str],
     p_2q: float = 1e-3,
     p_idle: float = 1e-4,
     shots: int = 1000,
@@ -120,10 +199,10 @@ def simulate_clifford_fidelity(
     Protocol: apply noisy forward circuit, then noiseless inverse circuit,
     measure all qubits. Fidelity = P(measuring all zeros).
     """
-    noisy_fwd = cirq_to_stim_circuit(forward_circuit, qubit_order, p_2q, p_idle)
+    noisy_fwd = qp_to_stim_circuit(forward_circuit, qubit_order, p_2q, p_idle)
 
-    inverse_circuit = cirq.inverse(forward_circuit)
-    noiseless_inv = cirq_to_stim_circuit(inverse_circuit, qubit_order)
+    inverse_circuit = qp.tape.qscript.QuantumScript(forward_circuit.operations[::-1])
+    noiseless_inv = qp_to_stim_circuit(inverse_circuit, qubit_order)
 
     combined = noisy_fwd + noiseless_inv
     combined.append("M", list(range(len(qubit_order))))

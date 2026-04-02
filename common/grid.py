@@ -7,7 +7,7 @@ three Gamma constructions.
 
 from typing import Dict, List, Sequence, Tuple
 
-import cirq
+import pennylane as qp
 import numpy as np
 
 
@@ -62,14 +62,14 @@ def sites_between(r1: int, c: int, r2: int, L: int) -> List[int]:
 # Qubit creation
 # ---------------------------------------------------------------------------
 
-def make_system_qubits(L: int) -> Dict[Tuple[int, int], cirq.GridQubit]:
+def make_system_qubits(L: int) -> Dict[Tuple[int, int], qp.wires.Wires]:
     """Create L x L grid of system qubits."""
-    return {(r, c): cirq.GridQubit(r, c) for r in range(L) for c in range(L)}
+    return {(r, c): qp.wires.Wires([f"({r}, {c})"]) for r in range(L) for c in range(L)}
 
 
-def make_ancilla_qubits(L: int) -> Dict[int, cirq.NamedQubit]:
+def make_ancilla_qubits(L: int) -> Dict[int, qp.wires.Wires]:
     """Create L ancilla qubits (one per row), used by Baseline 2."""
-    return {r: cirq.NamedQubit(f"anc_r{r}") for r in range(L)}
+    return {r: qp.wires.Wires([f"anc_r{r}"]) for r in range(L)}
 
 
 # ---------------------------------------------------------------------------
@@ -109,10 +109,10 @@ def raster_perm_to_snake(L: int, perm_raster: Sequence[int]) -> List[int]:
 # ---------------------------------------------------------------------------
 
 def column_parity_cascade_ops(
-    sq: Dict[Tuple[int, int], cirq.GridQubit],
+    sq: Dict[Tuple[int, int], qp.wires.Wires],
     L: int,
     inverse: bool = False,
-) -> List[cirq.Operation]:
+) -> List[qp.ops.Operation]:
     """Column parity CNOT cascade.
 
     Forward: bottom-to-top, CNOT(r+1,c -> r,c) for r from L-2 down to 0.
@@ -124,9 +124,9 @@ def column_parity_cascade_ops(
     if not inverse:
         for r in range(L - 2, -1, -1):
             for c in range(L):
-                ops.append(cirq.CNOT(sq[(r + 1, c)], sq[(r, c)]))
+                ops.append(qp.CNOT(sq[(r + 1, c)] + sq[(r, c)]))
     else:
         for r in range(L - 1):
             for c in range(L):
-                ops.append(cirq.CNOT(sq[(r + 1, c)], sq[(r, c)]))
+                ops.append(qp.CNOT(sq[(r + 1, c)] + sq[(r, c)]))
     return ops

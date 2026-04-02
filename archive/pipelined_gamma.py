@@ -28,7 +28,7 @@ Dependencies (defined in Gamma.ipynb cells 1, 3, 7):
     skip_row_T_ops (used only by pipeline_skip_only_ops reference tests)
 """
 
-import cirq
+import pennylane as qp
 import numpy as np
 from typing import Dict, List, Tuple
 
@@ -39,8 +39,8 @@ from typing import Dict, List, Tuple
 # When migrating to common/, import from there instead.
 # =============================================================================
 
-def make_system_qubits(L: int) -> Dict[Tuple[int, int], cirq.GridQubit]:
-    return {(r, c): cirq.GridQubit(r, c) for r in range(L) for c in range(L)}
+def make_system_qubits(L: int) -> Dict[Tuple[int, int], qp.wires.Wires]:
+    return {(r, c): qp.wires.Wires(r, c) for r in range(L) for c in range(L)}
 
 
 def column_parity_cascade_ops(sq, L, inverse=False):
@@ -48,20 +48,20 @@ def column_parity_cascade_ops(sq, L, inverse=False):
     if not inverse:
         for r in range(L - 2, -1, -1):
             for c in range(L):
-                ops.append(cirq.CNOT(sq[(r + 1, c)], sq[(r, c)]))
+                ops.append(qp.CNOT(sq[(r + 1, c)], sq[(r, c)]))
     else:
         for r in range(L - 1):
             for c in range(L):
-                ops.append(cirq.CNOT(sq[(r + 1, c)], sq[(r, c)]))
+                ops.append(qp.CNOT(sq[(r + 1, c)], sq[(r, c)]))
     return ops
 
 
 def prefix_cascade_ops(sq, r, L):
-    return [cirq.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(1, L)]
+    return [qp.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(1, L)]
 
 
 def undo_prefix_cascade_ops(sq, r, L):
-    return [cirq.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(L - 1, 0, -1)]
+    return [qp.CNOT(sq[(r, c - 1)], sq[(r, c)]) for c in range(L - 1, 0, -1)]
 
 
 # =============================================================================
@@ -79,11 +79,11 @@ def same_row_T_prefix_ops(sq, r, L):
     ops = []
     ops.extend(prefix_cascade_ops(sq, r, L))
     for c in range(L - 1):
-        ops.append(cirq.CZ(sq[(r, c)], sq[(r, c + 1)]))
+        ops.append(qp.CZ(sq[(r, c)], sq[(r, c + 1)]))
     ops.extend(undo_prefix_cascade_ops(sq, r, L))
     for p in range(L - 1):
         if (L - 1 - p) % 2 == 1:
-            ops.append(cirq.Z(sq[(r, p)]))
+            ops.append(qp.Z(sq[(r, p)]))
     return ops
 
 
@@ -102,23 +102,23 @@ def pipeline_same_cross_ops(sq, r, L):
     max_fwd = L - 2 + 4
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r, c)], sq[(r2, c)]))
         c_lo, c_hi = tau - 4, tau - 3
         if 0 <= c_lo and c_hi < L:
-            ops.append(cirq.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
+            ops.append(qp.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
     max_undo_extra = 3
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r, c)], sq[(r2, c)]))
         c = tau + 3
         if 0 <= c < L and (L - 1 - c) % 2 == 1:
-            ops.append(cirq.Z(sq[(r, c)]))
+            ops.append(qp.Z(sq[(r, c)]))
     return ops
 
 
@@ -137,41 +137,41 @@ def pipeline_same_skip_ops(sq, r, L):
     max_fwd = L - 2 + 6
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau - 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau - 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c_lo, c_hi = tau - 6, tau - 5
         if 0 <= c_lo and c_hi < L:
-            ops.append(cirq.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
+            ops.append(qp.CZ(sq[(r, c_lo)], sq[(r, c_hi)]))
     max_undo_extra = 5
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau + 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau + 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau + 5
         if 0 <= c < L and (L - 1 - c) % 2 == 1:
-            ops.append(cirq.Z(sq[(r, c)]))
+            ops.append(qp.Z(sq[(r, c)]))
     return ops
 
 
@@ -190,35 +190,35 @@ def pipeline_skip_only_ops(sq, r, L):
     max_fwd = L - 2 + 4
     for tau in range(max_fwd + 1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau - 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau - 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau - 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
     max_undo_extra = 4
     for tau in range(L - 2, -1 - max_undo_extra - 1, -1):
         if 0 <= tau <= L - 2:
-            ops.append(cirq.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
+            ops.append(qp.CNOT(sq[(r, tau)], sq[(r, tau + 1)]))
         c = tau + 1
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 2
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
         c = tau + 3
         if 0 <= c < L:
-            ops.append(cirq.CZ(sq[(r_mid, c)], sq[(r2, c)]))
+            ops.append(qp.CZ(sq[(r_mid, c)], sq[(r2, c)]))
         c = tau + 4
         if 0 <= c < L:
-            ops.append(cirq.CNOT(sq[(r, c)], sq[(r_mid, c)]))
+            ops.append(qp.CNOT(sq[(r, c)], sq[(r_mid, c)]))
     return ops
 
 
@@ -293,6 +293,6 @@ def build_gamma_pipelined(L):
     if L % 2 == 1:
         ops.extend(same_row_T_prefix_ops(sq, L - 1, L))
 
-    circuit = cirq.Circuit(ops)
+    circuit = qp.tape.qscript.QuantumScript(ops)
     sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
     return circuit, sys_list

@@ -1,11 +1,11 @@
-"""Tests for Cirq-to-Stim conversion and noisy Clifford fidelity simulation."""
+"""Tests for qp-to-Stim conversion and noisy Clifford fidelity simulation."""
 
 import numpy as np
 import pytest
 
 from common.fp_1d import build_fp_1d, build_benchmark_permutation
 from common.fp_2d import GammaMethod, build_fp_2d
-from common.stim_convert import cirq_to_stim_circuit, simulate_clifford_fidelity
+from common.stim_convert import qp_to_stim_circuit, simulate_clifford_fidelity
 
 
 # ---------------------------------------------------------------------------
@@ -84,11 +84,11 @@ def test_converter_all_baselines():
     perm = build_benchmark_permutation(L, "transpose")
 
     result_1d = build_fp_1d(L, perm)
-    cirq_to_stim_circuit(result_1d.circuit, _qubit_order(result_1d))
+    qp_to_stim_circuit(result_1d.circuit, _qubit_order(result_1d))
 
     for gamma in GammaMethod:
         result_2d = build_fp_2d(L, perm, gamma)
-        cirq_to_stim_circuit(result_2d.circuit, _qubit_order(result_2d))
+        qp_to_stim_circuit(result_2d.circuit, _qubit_order(result_2d))
 
 
 # ---------------------------------------------------------------------------

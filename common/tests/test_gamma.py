@@ -8,7 +8,7 @@ Verifies:
 
 import numpy as np
 import pytest
-import cirq
+import pennylane as qp
 
 from common.grid import make_system_qubits, sites_between, snake_to_rc
 from common.gamma_ancilla import build_gamma_with_ancillas
@@ -27,16 +27,16 @@ def classical_sim_phase(ops_list, qubit_to_idx, n_qubits, basis_state_bits):
     phase = 0
     for op in ops_list:
         gate = op.gate
-        qubits = op.qubits
-        if isinstance(gate, cirq.ops.common_gates.CNotPowGate) and gate.exponent == 1:
+        qubits = op.wires
+        if isinstance(gate, qp.ops.common_gates.CNotPowGate) and gate.exponent == 1:
             ctrl_idx = qubit_to_idx[qubits[0]]
             tgt_idx = qubit_to_idx[qubits[1]]
             bits[tgt_idx] ^= bits[ctrl_idx]
-        elif isinstance(gate, cirq.ops.common_gates.CZPowGate) and gate.exponent == 1:
+        elif isinstance(gate, qp.ops.common_gates.CZPowGate) and gate.exponent == 1:
             a_idx = qubit_to_idx[qubits[0]]
             b_idx = qubit_to_idx[qubits[1]]
             phase ^= (bits[a_idx] & bits[b_idx])
-        elif isinstance(gate, cirq.ops.common_gates.ZPowGate) and gate.exponent == 1:
+        elif isinstance(gate, qp.ops.common_gates.ZPowGate) and gate.exponent == 1:
             idx = qubit_to_idx[qubits[0]]
             phase ^= bits[idx]
         else:

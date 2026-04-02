@@ -1,4 +1,4 @@
-cirq
+pennylane
 openfermion
 numpy
 pandas
