@@ -222,7 +222,7 @@ def plot_round(
             [(x1 + 0.5, L - y1 - 0.5), (x2 + 0.5, L - y2 - 0.5)]
         )
     bg_lc = LineCollection(
-        bg_segments, colors="#d0d0d0", linewidths=0.4, alpha=0.6, zorder=1
+        bg_segments, colors="#a0a0a0", linewidths=0.7, alpha=0.7, zorder=1
     )
     ax.add_collection(bg_lc)
 
