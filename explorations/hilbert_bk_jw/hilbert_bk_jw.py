@@ -213,13 +213,27 @@ def plot_round(
 
     ax.imshow(grid, origin="upper", extent=[0, L, 0, L], interpolation="nearest")
 
-    # Draw edge lines.
+    # Background Hilbert curve trace.
+    bg_segments = []
+    for i in range(L * L - 1):
+        x1, y1 = coords[i]
+        x2, y2 = coords[i + 1]
+        bg_segments.append(
+            [(x1 + 0.5, L - y1 - 0.5), (x2 + 0.5, L - y2 - 0.5)]
+        )
+    bg_lc = LineCollection(
+        bg_segments, colors="#d0d0d0", linewidths=0.4, alpha=0.6, zorder=1
+    )
+    ax.add_collection(bg_lc)
+
+    # Draw colored interval edge lines on top.
     if all_segments:
         lc = LineCollection(
             all_segments,
             colors=all_seg_colors,
             linewidths=1.2 if L <= 16 else 0.8,
             alpha=0.85,
+            zorder=2,
         )
         ax.add_collection(lc)
 
