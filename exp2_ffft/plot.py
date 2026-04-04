@@ -154,8 +154,8 @@ def plot_depth_breakdown(df: pd.DataFrame, fig_dir: str):
     sub = df[(df["p_2q"] == p_val) & (df["method"] == "gamma_2d_proper")]
     L_values = sorted(v for v in sub["L"].unique() if v <= 20)
 
-    stage_names = [r"Odd-row rev", r"$\Gamma$ (x4)", "Col FFT", "Twiddle",
-                   "Row FFT", "FP transpose"]
+    stage_names = [r"Odd-row rev", r"$\Gamma$ ($\times 2$, DFT)", "Col FFT", "Twiddle",
+                   "Row FFT", r"FP reorder (incl. $\Gamma \times 2$)"]
     stage_data = {s: [] for s in stage_names}
 
     for L in L_values:
@@ -171,16 +171,12 @@ def plot_depth_breakdown(df: pd.DataFrame, fig_dir: str):
         fp = build_fp_2d(L, fp_perm, GammaMethod.PIPELINED)
 
         stage_data[r"Odd-row rev"].append(_d(rev))
-        stage_data[r"$\Gamma$ (x4)"].append(4 * _d(gamma))
+        stage_data[r"$\Gamma$ ($\times 2$, DFT)"].append(2 * _d(gamma))
         stage_data["Col FFT"].append(_d(col))
         stage_data["Twiddle"].append(_d(tw))
         stage_data["Row FFT"].append(_d(row))
-        # FP transpose has its own 2 Gammas inside; subtract to avoid
-        # double-counting with the x4 above. Actually the FP circuit includes
-        # 2 Gammas already, so report net FP depth (includes its own Gammas).
-        # Re-do: report the 2 DFT Gammas and FP total separately.
-        stage_data[r"$\Gamma$ (x4)"][-1] = 2 * _d(gamma)  # only DFT Gammas
-        stage_data["FP transpose"].append(_d(fp.circuit))
+        # FP circuit includes its own 2 Gammas; report as one block
+        stage_data[r"FP reorder (incl. $\Gamma \times 2$)"].append(_d(fp.circuit))
 
     fig, ax = plt.subplots(figsize=(max(6, len(L_values) * 0.7 + 1), 4.5))
     x = np.arange(len(L_values))
