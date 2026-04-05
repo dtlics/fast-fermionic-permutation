@@ -69,10 +69,13 @@ def collect_instance(
                 p_2q=p_2q, p_idle=p_idle,
             )
 
-            stim_fid = simulate_clifford_fidelity(
-                result.circuit, qo,
-                p_2q=p_2q, p_idle=p_idle, shots=shots,
-            )
+            if shots > 0:
+                stim_fid = simulate_clifford_fidelity(
+                    result.circuit, qo,
+                    p_2q=p_2q, p_idle=p_idle, shots=shots,
+                )
+            else:
+                stim_fid = float("nan")
 
             rows.append({
                 "L": L,
@@ -98,7 +101,7 @@ def collect_instance(
 
 
 def run_experiment(
-    L_values: Sequence[int] = (4, 6, 8, 10, 12, 14, 16, 18, 20),
+    L_values: Sequence[int] = (4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30),
     perm_kinds: Sequence[str] = ("reverse", "transpose", "random"),
     n_random: int = 20,
     p_values: Sequence[float] = (1e-3, 1e-4, 1e-5),
