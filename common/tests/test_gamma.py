@@ -10,11 +10,11 @@ import numpy as np
 import pytest
 import pennylane as qp
 
+from common.gates import CNotPowGate, CZPowGate, ZPowGate
 from common.grid import make_system_qubits, sites_between, snake_to_rc
 from common.gamma_ancilla import build_gamma_with_ancillas
 from common.gamma_primitive import build_gamma_ancilla_free
 from common.gamma_pipeline import build_gamma_pipelined
-from common.stim_convert import CNotPowGate, CZPowGate, ZPowGate
 
 
 # ---------------------------------------------------------------------------

@@ -10,26 +10,7 @@ from typing import List
 
 import pennylane as qp
 
-
-class FSWAP(qp.operation.Operator):
-    num_params=0
-    num_wires=2
-
-    def __init__(self, wires: qp.wires.WiresLike):
-        self.exponent = 1
-        super().__init__(wires)
-
-    def compute_matrix(self, t):
-        p = qp.math.exp(1j * np.pi)
-        g = qp.math.exp((1j * np.pi) / 2)
-        s = qp.math.sin(np.pi / 2)
-        c = qp.math.cos(np.pi / 2)
-        return qp.math.array([
-            [1, 0, 0, 0],
-            [0, g * c, -1j * g * s, 0],
-            [0, -1j * g * s, g * c, 0],
-            [0, 0, 0, p]
-        ])
+from common.gates import FSWAP
 
 
 def fswap_odd_even_sort_ops(qubits: List[qp.wires.Wires], perm: List[int]) -> List[qp.ops.Operation]:

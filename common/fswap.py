@@ -11,7 +11,7 @@ from typing import List
 
 import pennylane as qp
 
-from common.stim_convert import FSwapPowGate
+from common.gates import FSwapPowGate, FSWAP
 
 # Cost of one FSWAP in CNOT-equivalent depth
 FSWAP_CNOT_COST = 2
@@ -19,4 +19,4 @@ FSWAP_CNOT_COST = 2
 
 def is_fswap(gate) -> bool:
     """Check if a gate is an FSWAP gate."""
-    return isinstance(gate, FSwapPowGate)
+    return isinstance(gate, FSwapPowGate) or isinstance(gate, FSWAP)
