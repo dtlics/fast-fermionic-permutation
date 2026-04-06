@@ -17,6 +17,20 @@ from common.gamma_primitive import build_gamma_ancilla_free
 from common.gamma_pipeline import build_gamma_pipelined
 
 
+def tape_to_qfunc(tape):
+    for op in tape.operations:
+        qp.apply(op)
+    for meas in tape.measurements:
+        qp.apply(meas)
+
+
+def get_depth(circ):
+    @qp.qnode(qp.device("default.clifford", tableau=False))
+    def qfunc():
+        tape_to_qfunc(circ)
+
+    return qp.specs(qfunc)().resources.depth
+
 # ---------------------------------------------------------------------------
 # Classical Clifford simulator (Gamma is entirely Clifford: CNOT, CZ, Z)
 # ---------------------------------------------------------------------------
@@ -27,17 +41,17 @@ def classical_sim_phase(ops_list, qubit_to_idx, n_qubits, basis_state_bits):
     bits = list(basis_state_bits)
     phase = 0
     for op in ops_list:
-        gate = op.gate
+        gate = op
         qubits = op.wires
-        if isinstance(gate, CNotPowGate) and gate.exponent == 1:
+        if (isinstance(gate, CNotPowGate) and gate.exponent == 1) or isinstance(gate, qp.CNOT):
             ctrl_idx = qubit_to_idx[qubits[0]]
             tgt_idx = qubit_to_idx[qubits[1]]
             bits[tgt_idx] ^= bits[ctrl_idx]
-        elif isinstance(gate, CZPowGate) and gate.exponent == 1:
+        elif (isinstance(gate, CZPowGate) and gate.exponent == 1) or isinstance(gate, qp.CZ):
             a_idx = qubit_to_idx[qubits[0]]
             b_idx = qubit_to_idx[qubits[1]]
             phase ^= (bits[a_idx] & bits[b_idx])
-        elif isinstance(gate, ZPowGate) and gate.exponent == 1:
+        elif (isinstance(gate, ZPowGate)  and gate.exponent == 1) or isinstance(gate, qp.Z):
             idx = qubit_to_idx[qubits[0]]
             phase ^= bits[idx]
         else:
@@ -78,7 +92,8 @@ def test_gamma_ancilla_depth(L):
     """Verify ancilla Gamma depth = 7L - 3."""
     circ, _, _ = build_gamma_with_ancillas(L)
     expected = 7 * L - 3
-    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+
+    assert get_depth(circ) == expected, f"L={L}: got {get_depth(circ)}, expected {expected}"
 
 
 @pytest.mark.parametrize("L", [5, 7, 9, 11, 15])
@@ -90,7 +105,7 @@ def test_gamma_primitive_depth(L):
     """
     circ, _ = build_gamma_ancilla_free(L)
     expected = 12 * L + 8
-    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+    assert get_depth(circ) == expected, f"L={L}: got {get_depth(circ)}, expected {expected}"
 
 
 @pytest.mark.parametrize("L", [5, 7, 9, 11, 15])
@@ -101,7 +116,7 @@ def test_gamma_pipelined_depth(L):
         expected = 8 * L + 9
     else:
         expected = 8 * L + 10
-    assert len(circ) == expected, f"L={L}: got {len(circ)}, expected {expected}"
+    assert get_depth(circ) == expected, f"L={L}: got {get_depth(circ)}, expected {expected}"
 
 
 # ---------------------------------------------------------------------------
