@@ -44,15 +44,15 @@ def classical_sim_phase(ops_list, qubit_to_idx, n_qubits, basis_state_bits):
         gate = op
         qubits = op.wires
         if (isinstance(gate, CNotPowGate) and gate.exponent == 1) or isinstance(gate, qp.CNOT):
-            ctrl_idx = qubit_to_idx[qp.wires.Wires(qubits[0])]
-            tgt_idx = qubit_to_idx[qp.wires.Wires(qubits[1])]
+            ctrl_idx = qubit_to_idx[qp.wires.Wires(qubits[0])] if isinstance(list(qubit_to_idx.keys())[0], qp.wires.Wires) else qubit_to_idx[qubits[0]]
+            tgt_idx = qubit_to_idx[qp.wires.Wires(qubits[1])] if isinstance(list(qubit_to_idx.keys())[0], qp.wires.Wires) else qubit_to_idx[qubits[1]]
             bits[tgt_idx] ^= bits[ctrl_idx]
         elif (isinstance(gate, CZPowGate) and gate.exponent == 1) or isinstance(gate, qp.CZ):
-            a_idx = qubit_to_idx[qp.wires.Wires(qubits[0])]
-            b_idx = qubit_to_idx[qp.wires.Wires(qubits[1])]
+            a_idx = qubit_to_idx[qp.wires.Wires(qubits[0])] if isinstance(list(qubit_to_idx.keys())[0], qp.wires.Wires) else qubit_to_idx[qubits[0]]
+            b_idx = qubit_to_idx[qp.wires.Wires(qubits[1])] if isinstance(list(qubit_to_idx.keys())[0], qp.wires.Wires) else qubit_to_idx[qubits[1]]
             phase ^= (bits[a_idx] & bits[b_idx])
         elif (isinstance(gate, ZPowGate)  and gate.exponent == 1) or isinstance(gate, qp.Z):
-            idx = qubit_to_idx[qp.wires.Wires(qubits[0])]
+            idx = qubit_to_idx[qp.wires.Wires(qubits[0])] if isinstance(list(qubit_to_idx.keys())[0], qp.wires.Wires) else qubit_to_idx[qubits[0]]
             phase ^= bits[idx]
         else:
             raise ValueError(f"Unsupported gate in Gamma: {gate}")
