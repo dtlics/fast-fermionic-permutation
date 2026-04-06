@@ -30,8 +30,8 @@ def main():
                         help="2-qubit gate error rates")
     parser.add_argument("--p-idle-factor", type=float, default=0.1,
                         help="p_idle = p_2q * factor (default: 0.1)")
-    parser.add_argument("--shots", type=int, default=1000,
-                        help="Stim shots per instance (default: 1000)")
+    parser.add_argument("--shots", type=int, default=1_000_000,
+                        help="Stim shots per instance (default: 1000000)")
     parser.add_argument("--output-dir", default="exp1_fp/results",
                         help="Output directory for data")
     parser.add_argument("--fig-dir", default="exp1_fp/figures",

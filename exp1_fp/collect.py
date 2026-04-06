@@ -106,7 +106,7 @@ def run_experiment(
     n_random: int = 20,
     p_values: Sequence[float] = (1e-3, 1e-4, 1e-5),
     p_idle_factor: float = 0.1,
-    shots: int = 1000,
+    shots: int = 1_000_000,
     output_dir: str = "exp1_fp/results",
 ) -> pd.DataFrame:
     """Run the full Experiment 1 sweep."""
