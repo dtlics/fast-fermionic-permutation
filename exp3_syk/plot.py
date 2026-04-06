@@ -174,72 +174,105 @@ def _draw_crossover(ax, N_cross: float, y_pos: float):
                 xytext=(0, 2), textcoords="offset points")
 
 
-def plot_fidelity_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
-    """Plot fidelity vs N (log-log), panels for p=1e-5 and p=1e-4.
+def _find_fidelity_p(df_k: pd.DataFrame, target_frac: float = 0.80,
+                      p_idle_factor: float = 0.1) -> float:
+    """Binary-search for the largest p_2q where *pipelined* has ≥ target_frac
+    of its N-values with mean fidelity > 0.5.
 
-    y-axis is tailored using the p_2q=1e-5 panel as reference.
-    Curves that drop below y_floor stop early.
-    Vertical crossover line where FP w/o ancillas becomes the best method.
+    Recomputes fidelity from gate counts so we are not limited to the p_2q
+    values stored in the CSV.
+    """
+    # Grab gate counts (same for every stored p_2q).
+    ref_p = df_k["p_2q"].min()
+    sub = df_k[(df_k["p_2q"] == ref_p) & (df_k["baseline"] == "pipelined")]
+    g2q = sub.groupby("N")["total_2q_gates"].mean()
+    gidle = sub.groupby("N")["total_idle_slots"].mean()
+    n_points = len(g2q)
+
+    def frac_above(p: float) -> float:
+        above = 0
+        for N in g2q.index:
+            F = (1 - p) ** g2q[N] * (1 - p * p_idle_factor) ** gidle[N]
+            if F > 0.5:
+                above += 1
+        return above / n_points
+
+    lo, hi = 1e-10, 1e-4
+    for _ in range(80):
+        mid = np.sqrt(lo * hi)          # geometric midpoint
+        if frac_above(mid) >= target_frac:
+            lo = mid
+        else:
+            hi = mid
+    return np.sqrt(lo * hi)
+
+
+def _recompute_fidelity(df_k: pd.DataFrame, p_2q: float,
+                         p_idle_factor: float = 0.1) -> pd.DataFrame:
+    """Return a copy of df_k (at any single stored p_2q) with mult_fidelity
+    recomputed for the given *p_2q*."""
+    ref_p = df_k["p_2q"].min()
+    out = df_k[df_k["p_2q"] == ref_p].copy()
+    p_idle = p_2q * p_idle_factor
+    out["mult_fidelity"] = (
+        (1 - p_2q) ** out["total_2q_gates"]
+        * (1 - p_idle) ** out["total_idle_slots"]
+    )
+    out["p_2q"] = p_2q
+    return out
+
+
+def plot_fidelity_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
+    """Plot fidelity vs N (log-log) at automatically chosen p_2q.
+
+    p_2q is the largest value for which ≥ 80 % of system sizes keep
+    the *pipelined* fidelity above 0.5, so the plot stays in a
+    visually meaningful range.
     """
     _setup_style()
     k_val = _primary_k(df)
     df_k = df[df["k"] == k_val]
-    # Only show p=1e-5 and p=1e-4 (drop 1e-3)
-    p_values = sorted(p for p in df_k["p_2q"].unique() if p <= 1e-4)
 
-    fp_baselines = ["1d", "ancilla", "pipelined"]
+    # Fixed p_2q chosen so the plot stays in a meaningful fidelity range.
+    p_2q = 1e-6
 
-    fig, axes = plt.subplots(1, len(p_values),
-                              figsize=(5 * len(p_values), 4.5),
-                              squeeze=False, sharey=True)
+    # Recompute fidelity at this p for all baselines
+    df_sub = _recompute_fidelity(df_k, p_2q)
+    data = _aggregate(df_sub, "mult_fidelity")
 
-    # y-floor from the p_2q=1e-5 panel (reference case)
-    ref_sub = df_k[df_k["p_2q"] == 1e-5]
-    ref_data = _aggregate(ref_sub, "mult_fidelity")
-    fp_min = 1.0
-    for bl in fp_baselines:
-        if bl in ref_data:
-            vals = ref_data[bl]["mean"]
-            positive = vals[vals > 0]
-            if len(positive) > 0:
-                fp_min = min(fp_min, positive.min())
-    y_floor = max(fp_min * 0.1, 1e-300)
+    y_floor = 1e-3  # nothing meaningful below this at the chosen p
 
-    for col, p_2q in enumerate(p_values):
-        ax = axes[0, col]
-        df_sub = df_k[df_k["p_2q"] == p_2q]
-        data = _aggregate(df_sub, "mult_fidelity")
+    fig, ax = plt.subplots(figsize=(6, 4.5))
 
-        for baseline in PLOT_BASELINES:
-            if baseline not in data:
-                continue
-            d = data[baseline]
-            style = BASELINE_STYLES[baseline]
-            mask = d["mean"] >= y_floor
-            if not mask.any():
-                continue
-            ax.plot(d["N"][mask], d["mean"][mask],
-                    color=style["color"], marker=style["marker"],
-                    label=style["label"], linewidth=1.5, markersize=5)
+    for baseline in PLOT_BASELINES:
+        if baseline not in data:
+            continue
+        d = data[baseline]
+        style = BASELINE_STYLES[baseline]
+        mask = d["mean"] >= y_floor
+        if not mask.any():
+            continue
+        ax.plot(d["N"][mask], d["mean"][mask],
+                color=style["color"], marker=style["marker"],
+                label=style["label"], linewidth=1.5, markersize=5)
 
-        # Crossover vertical line where FP w/o ancillas becomes best
-        N_cross = _find_pipelined_crossover_N(data)
-        if N_cross is not None:
-            _draw_crossover(ax, N_cross, y_floor)
+    # Crossover vertical line where FP w/o ancillas becomes best
+    N_cross = _find_pipelined_crossover_N(data)
+    if N_cross is not None:
+        _draw_crossover(ax, N_cross, y_floor)
 
-        ax.set_xlabel(r"$N = L^2$")
-        if col == 0:
-            ax.set_ylabel("Fidelity estimate")
-        ax.set_title(f"k={k_val}, p = {p_2q:.0e}")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        ax.legend(fontsize=8)
-        ax.grid(True, which="major", alpha=0.3)
-
-    axes[0, 0].set_ylim(bottom=y_floor, top=2.0)
+    ax.set_xlabel(r"$N = L^2$")
+    ax.set_ylabel("Fidelity estimate")
+    # Format p in the title with one significant figure of the exponent
+    p_exp = np.log10(p_2q)
+    ax.set_title(f"k={k_val}, p = {p_2q:.1e}")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_ylim(bottom=y_floor, top=2.0)
+    ax.legend(fontsize=8)
+    ax.grid(True, which="major", alpha=0.3)
     fig.suptitle(r"Estimated Fidelity $(1-p)^G$ — Per Trotter Step", y=1.02)
     fig.tight_layout()
-    fig.subplots_adjust(wspace=0.05)
     _save_fig(fig, "fidelity_vs_N", output_dir)
 
 
