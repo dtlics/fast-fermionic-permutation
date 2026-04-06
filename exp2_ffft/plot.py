@@ -14,9 +14,10 @@ import pandas as pd
 # -- Style & method configuration -------------------------------------------
 
 METHOD_STYLES = {
-    "1d_baseline":   {"color": "C0", "marker": "o", "label": "CT-FFFT"},
+    "1d_baseline":   {"color": "C2", "marker": "o", "label": "CT-FFFT"},
     "gamma_2d_core": {"color": "C1", "marker": "^", "label": "2D (no reorder)"},
-    "gamma_2d_proper": {"color": "C3", "marker": "s", "label": "FP-FFFT"},
+    "gamma_2d_proper": {"color": "C3", "marker": "s",
+                        "label": "Gamma-FP-FFFT w/o ancillas"},
 }
 
 # Methods shown in plots (gamma_2d_core kept in data/code but hidden).
@@ -138,7 +139,14 @@ def plot_spacetime_vs_N(df: pd.DataFrame, fig_dir: str):
 
 def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
     _setup_style()
+
+    from common.fp_2d import GammaMethod
+    from exp2_ffft.collect import count_cnot_resources
+    from exp2_ffft.ffft_proper import build_ffft_proper
+    from common.metrics import multiplicative_fidelity
+
     p_values = sorted(df["p_2q"].unique())
+    p_idle_factor = df["p_idle"].iloc[0] / df["p_2q"].iloc[0]
 
     # y-floor from the p_2q=1e-4 panel (reference case)
     ref_sub = df[df["p_2q"] == 1e-4]
@@ -149,6 +157,20 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
     ]
     y_floor = ref_fid.min() * 0.1 if not ref_fid.empty else 1e-6
 
+    # -- Pre-compute ancilla variant fidelity for each (L, p_2q) -------------
+    L_all = sorted(df["L"].unique())
+    anc_fidelity = {}  # (L, p_2q) -> fidelity
+    for L in L_all:
+        r_anc = build_ffft_proper(L, GammaMethod.ANCILLA)
+        n_anc = len(r_anc.anc_qubits)
+        res = count_cnot_resources(r_anc.circuit, L, n_anc)
+        for p_2q in p_values:
+            p_idle = p_2q * p_idle_factor
+            fid = multiplicative_fidelity(
+                res["total_2q_gates"], res["total_idle_slots"],
+                p_2q=p_2q, p_idle=p_idle)
+            anc_fidelity[(L, p_2q)] = fid
+
     fig, axes = plt.subplots(1, len(p_values),
                               figsize=(5 * len(p_values), 4.2), sharey=True)
     if len(p_values) == 1:
@@ -156,6 +178,8 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
 
     for ax, p_2q in zip(axes, p_values):
         sub = df[df["p_2q"] == p_2q]
+
+        # Existing methods from CSV
         for method, style in METHOD_STYLES.items():
             if method not in _PLOT_METHODS:
                 continue
@@ -166,14 +190,30 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
             ax.semilogy(data["N"], data["mult_fidelity"],
                         marker=style["marker"], color=style["color"],
                         label=style["label"], linewidth=1.5, markersize=5)
-        ax.set_xlabel(r"$N = L^2$")
-        ax.set_title(f"$p_{{2q}} = {p_2q:.0e}$")
+
+        # Ancilla variant (computed on-the-fly)
+        anc_N = [L * L for L in L_all]
+        anc_f = [anc_fidelity[(L, p_2q)] for L in L_all]
+        anc_N_f = [(n, f) for n, f in zip(anc_N, anc_f) if f >= y_floor]
+        if anc_N_f:
+            ns, fs = zip(*anc_N_f)
+            ax.semilogy(ns, fs, marker="P", color="C0",
+                        label="Gamma-FP-FFFT w/ ancillas",
+                        linewidth=1.5, markersize=5)
+
+        ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=14)
+        ax.set_title(f"$\\mathbf{{p_{{2q}} = {p_2q:.0e}}}$", fontsize=14)
+        ax.tick_params(axis="both", labelsize=12)
+        for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+            lbl.set_fontweight("bold")
         ax.grid(True, alpha=0.2)
 
     axes[0].set_ylim(bottom=y_floor, top=2.0)
-    axes[0].set_ylabel("Estimated fidelity")
-    axes[-1].legend(loc="lower left", framealpha=0.9)
-    fig.suptitle("Fidelity Estimate", fontsize=14, y=1.02)
+    axes[0].set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=14)
+    axes[-1].legend(loc="lower left", framealpha=0.9, fontsize=12,
+                    prop={"weight": "bold"})
+    fig.suptitle(r"$\mathbf{Estimated\;Fidelity\;(1-p)^G}$",
+                 fontsize=16, y=1.02, fontweight="bold")
     fig.tight_layout()
     _save_fig(fig, fig_dir, "fidelity_vs_N")
 
@@ -409,11 +449,11 @@ def plot_depth_breakdown(df: pd.DataFrame, fig_dir: str):
 
     # Method markers placed on bar tops
     method_markers = [
-        ("Gamma-FP-FFFT w/o ancillas", "s", "#333333"),  # square
-        ("Gamma-FP-FFFT w/ ancillas",  "P", "#333333"),  # plus (filled)
-        ("FP-FFFT w/o ancillas",       "D", "#333333"),  # diamond
-        ("FP-FFFT FSWAP baseline",     "^", "#333333"),  # triangle
-        ("CT-FFFT",                    "o", "#333333"),   # circle
+        (r"Gamma-FP-FFFT w/o ancillas: $\mathbf{O(N^{1/2})}$", "s", "#333333"),
+        (r"Gamma-FP-FFFT w/ ancillas: $\mathbf{O(N^{1/2})}$",  "P", "#333333"),
+        (r"FP-FFFT w/o ancillas: $\mathbf{O(N^{1/2})}$",       "D", "#333333"),
+        (r"FP-FFFT FSWAP baseline: $\mathbf{O(N)}$",            "^", "#333333"),
+        (r"CT-FFFT: $\mathbf{O(N)}$",                           "o", "#333333"),
     ]
 
     bar_tops = []
