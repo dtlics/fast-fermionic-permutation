@@ -50,7 +50,7 @@ def _setup_style():
 
 def _save_fig(fig, name: str, output_dir: str):
     os.makedirs(output_dir, exist_ok=True)
-    for ext in ("pdf", "png"):
+    for ext in ("svg",):
         fig.savefig(os.path.join(output_dir, f"{name}.{ext}"))
     plt.close(fig)
 

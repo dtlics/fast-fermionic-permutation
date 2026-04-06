@@ -36,7 +36,7 @@ def _setup_style():
 
 def _save_fig(fig, fig_dir: str, name: str):
     os.makedirs(fig_dir, exist_ok=True)
-    for ext in ("pdf", "png"):
+    for ext in ("svg",):
         fig.savefig(os.path.join(fig_dir, f"{name}.{ext}"),
                     bbox_inches="tight", dpi=200)
     plt.close(fig)
