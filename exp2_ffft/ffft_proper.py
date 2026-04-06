@@ -80,6 +80,7 @@ import cirq
 from openfermion.circuits.gates import FSWAP
 
 from common.fp_2d import FPResult, GammaMethod, build_fp_2d
+from common.fp_1d import build_fp_1d
 from common.grid import make_system_qubits, rc_to_snake, snake_to_rc
 from common.gamma_pipeline import build_gamma_pipelined
 from common.gamma_primitive import build_gamma_ancilla_free
@@ -263,5 +264,130 @@ def build_ffft_proper(
         sys_qubits=sys_list,
         anc_qubits=anc_list,
         gamma_method=gamma_method.value,
+        L=L,
+    )
+
+
+# ---------------------------------------------------------------------------
+# FP-sandwich builders (transpose-based, no Gamma)
+# ---------------------------------------------------------------------------
+
+def _transpose_perm(L: int) -> List[int]:
+    """Raster-order transpose permutation: (r,c) -> (c,r)."""
+    return [c * L + r for r in range(L) for c in range(L)]
+
+
+def _rev_transpose_perm(L: int) -> List[int]:
+    """Combined odd-row reversal + transpose.
+
+    Folds ``_build_odd_row_reversal`` into the first FP call so the
+    circuit has no separate odd-row-rev stage.
+
+    Even rows: (r,c) -> (c,r)    [plain transpose]
+    Odd  rows: (r,c) -> (L-1-c,r) [reverse within row, then transpose]
+    """
+    perm = [0] * (L * L)
+    for r in range(L):
+        for c in range(L):
+            if r % 2 == 1:
+                perm[r * L + c] = (L - 1 - c) * L + r
+            else:
+                perm[r * L + c] = c * L + r
+    return perm
+
+
+def build_ffft_fp_sandwich_2d(
+    L: int,
+    gamma_method: GammaMethod = GammaMethod.PIPELINED,
+) -> FPResult:
+    """Build 2D FFFT using FP(transpose) sandwich instead of Gamma sandwich.
+
+    Circuit:
+        FP_2d(rev+trans) -> row F_L -> FP_2d(trans)
+        -> twiddle -> row F_L -> FP_2d(reorder)
+
+    The first FP folds odd-row-reversal into the transpose so there
+    is no separate rev stage.  Row FFTs after the first FP act as
+    column FFTs in the original layout (JW-local, no Gamma needed).
+
+    Args:
+        L: grid side length (N = L^2 modes).
+        gamma_method: which Gamma construction the internal FP uses.
+
+    Returns:
+        FPResult with the assembled circuit.
+    """
+    sq = make_system_qubits(L)
+    sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
+
+    fp_first = build_fp_2d(L, _rev_transpose_perm(L), gamma_method)
+    fp_trans = build_fp_2d(L, _transpose_perm(L), gamma_method)
+
+    row_circ = build_row_fffts(L, sq)
+    twiddle_circ = build_twiddle_circuit(L, sq)
+
+    reorder_perm = _col_major_raster_to_row_major_snake_perm(L)
+    fp_reorder = build_fp_2d(L, reorder_perm, gamma_method)
+
+    circuit = (
+        fp_first.circuit
+        + row_circ
+        + fp_trans.circuit
+        + twiddle_circ
+        + row_circ
+        + fp_reorder.circuit
+    )
+
+    return FPResult(
+        circuit=circuit,
+        sys_qubits=sys_list,
+        anc_qubits=fp_first.anc_qubits,
+        gamma_method=gamma_method.value,
+        L=L,
+    )
+
+
+def build_ffft_fp_sandwich_1d(L: int) -> FPResult:
+    """Build 2D FFFT using 1D snake-order FP(transpose) sandwich.
+
+    Same structure as build_ffft_fp_sandwich_2d but all FP circuits
+    use the 1D baseline (snake-order FSWAP odd-even sort, O(L^2) depth).
+
+    Circuit:
+        FP_1d(rev+trans) -> row F_L -> FP_1d(trans)
+        -> twiddle -> row F_L -> FP_1d(reorder)
+
+    Args:
+        L: grid side length (N = L^2 modes).
+
+    Returns:
+        FPResult with the assembled circuit.
+    """
+    sq = make_system_qubits(L)
+    sys_list = [sq[(r, c)] for r in range(L) for c in range(L)]
+
+    fp_first = build_fp_1d(L, _rev_transpose_perm(L))
+    fp_trans = build_fp_1d(L, _transpose_perm(L))
+
+    row_circ = build_row_fffts(L, sq)
+    twiddle_circ = build_twiddle_circuit(L, sq)
+
+    reorder_perm = _col_major_raster_to_row_major_snake_perm(L)
+    fp_reorder = build_fp_1d(L, reorder_perm)
+
+    circuit = (
+        fp_first.circuit
+        + row_circ
+        + fp_trans.circuit
+        + twiddle_circ
+        + row_circ
+        + fp_reorder.circuit
+    )
+
+    return FPResult(
+        circuit=circuit,
+        sys_qubits=sys_list,
+        anc_qubits=[],
+        gamma_method=None,
         L=L,
     )
