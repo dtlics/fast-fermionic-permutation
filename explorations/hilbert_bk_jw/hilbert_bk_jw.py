@@ -17,7 +17,8 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PatchCollection
+from matplotlib.patches import Rectangle
 
 FIGURES_DIR = Path(__file__).parent / "figures"
 
@@ -191,70 +192,80 @@ def _render_round_on_ax(
     L: int,
     coords: np.ndarray,
 ) -> int:
-    """Render one round of CNOT intervals onto *ax*. Returns max_interval."""
+    """Render one round of CNOT intervals onto *ax*. Returns max_interval.
+
+    SVG layering pitfalls (hard-won lessons):
+
+    1. matplotlib's SVG backend renders artist *types* in separate groups
+       (patches, then collections, then lines, …).  zorder only sorts
+       correctly among artists of the **same type**.  So an ``ax.add_patch``
+       Rectangle (Patch) will always render in a different SVG group than an
+       ``ax.add_collection`` LineCollection, regardless of zorder.
+       → Fix: use PatchCollection (a Collection) for the cell fills, so it
+       lives in the same SVG group as LineCollections and zorder works.
+
+    2. An earlier version drew "colored interval edge segments" — Hilbert-curve
+       segments within each interval, colored the same as the cell fill — on
+       top of the background Hilbert trace.  Because they shared the fill
+       color, they visually merged with the cells and masked the trace,
+       producing a faint double-outline instead of a solid line.
+       → Fix: remove the colored interval segments entirely.  The single
+       Hilbert-curve trace is enough to show connectivity.
+
+    3. ``ax.imshow`` renders as a raster ``<image>`` tag in SVG, which is
+       always composited below vector ``<path>`` elements in most SVG
+       renderers, no matter the zorder.
+       → Fix: use vector PatchCollection instead of imshow for cell fills.
+    """
     num_intervals = len(round_pairs)
     colors = [INTERVAL_PALETTE[i % len(INTERVAL_PALETTE)] for i in range(num_intervals)]
 
-    # Build RGBA grid: start white.
-    grid = np.ones((L, L, 4), dtype=float)
+    # — Layer 0: colored cell fills (PatchCollection) —
+    cell_rects: list[Rectangle] = []
+    cell_colors: list[tuple[float, ...]] = []
 
-    # Mark unused cells (indices N .. L*L-1) as light gray.
+    for d in range(L * L):
+        cx, cy = coords[d]
+        cell_rects.append(Rectangle((cx, L - cy - 1), 1, 1))
+        cell_colors.append((1.0, 1.0, 1.0, 1.0))  # white
+
     for u in range(N, L * L):
-        ux, uy = coords[u]
-        grid[uy, ux] = [0.85, 0.85, 0.85, 1.0]
+        cell_colors[u] = (0.85, 0.85, 0.85, 1.0)  # unused → light gray
 
-    # Color intervals and collect edge segments.
     max_interval = 0
-    all_segments: list[list[tuple[float, float]]] = []
-    all_seg_colors: list[tuple[float, ...]] = []
-
     for idx, (a, b) in enumerate(round_pairs):
-        interval_len = b - a
-        max_interval = max(max_interval, interval_len)
-        color = colors[idx]
-
+        max_interval = max(max_interval, b - a)
         for i in range(a, b + 1):
-            cx, cy = coords[i]
-            grid[cy, cx] = color
+            cell_colors[i] = colors[idx]
 
-        for i in range(a, b):
-            x1, y1 = coords[i]
-            x2, y2 = coords[i + 1]
-            all_segments.append(
-                [(x1 + 0.5, L - y1 - 0.5), (x2 + 0.5, L - y2 - 0.5)]
-            )
-            all_seg_colors.append(color)
+    pc = PatchCollection(cell_rects, match_original=False, edgecolors="none")
+    pc.set_facecolor(cell_colors)
+    pc.set_zorder(0)
+    ax.add_collection(pc)
 
-    ax.imshow(grid, origin="upper", extent=[0, L, 0, L], interpolation="nearest")
+    # — Layer 1: grid lines —
+    grid_segs = []
+    for i in range(L + 1):
+        grid_segs.append([(i, 0), (i, L)])
+        grid_segs.append([(0, i), (L, i)])
+    grid_lc = LineCollection(grid_segs, colors="gray", linewidths=0.3, alpha=0.5)
+    grid_lc.set_zorder(1)
+    ax.add_collection(grid_lc)
 
-    # Background Hilbert curve trace.
-    bg_segments = []
+    # — Layer 2: Hilbert curve trace (topmost) —
+    hilbert_segs = []
     for i in range(L * L - 1):
         x1, y1 = coords[i]
         x2, y2 = coords[i + 1]
-        bg_segments.append(
+        hilbert_segs.append(
             [(x1 + 0.5, L - y1 - 0.5), (x2 + 0.5, L - y2 - 0.5)]
         )
-    bg_lc = LineCollection(
-        bg_segments, colors="#a0a0a0", linewidths=0.7, alpha=0.7, zorder=1
+    hilbert_lc = LineCollection(
+        hilbert_segs, colors="#404040",
+        linewidths=2.0 if L <= 16 else 1.2,
     )
-    ax.add_collection(bg_lc)
-
-    # Draw colored interval edge lines on top.
-    if all_segments:
-        lc = LineCollection(
-            all_segments,
-            colors=all_seg_colors,
-            linewidths=1.2 if L <= 16 else 0.8,
-            alpha=0.85,
-            zorder=2,
-        )
-        ax.add_collection(lc)
-
-    # Grid lines.
-    for i in range(L + 1):
-        ax.axhline(i, color="gray", linewidth=0.3, alpha=0.5)
-        ax.axvline(i, color="gray", linewidth=0.3, alpha=0.5)
+    hilbert_lc.set_zorder(2)
+    ax.add_collection(hilbert_lc)
 
     ax.set_xlim(0, L)
     ax.set_ylim(0, L)
@@ -378,8 +389,6 @@ def main():
     verify_against_reference()
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
-
-    import math
 
     # Combined subfigures for even k values (L² = N+1, tight fit).
     for k_small in [4, 6]:
