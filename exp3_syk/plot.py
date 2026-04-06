@@ -276,70 +276,111 @@ def plot_fidelity_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
     _save_fig(fig, "fidelity_vs_N", output_dir)
 
 
-def plot_depth_breakdown_trend(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
-    """Methods' total depth vs N=L^2, with shared interaction-only line.
+def plot_depth_breakdown(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
+    """Grouped bar chart: total CNOT depth per method.
 
-    Solid lines = total CNOT depth per method.
-    Dashed gray line = interaction depth (shared across all FP methods).
-    For naive Pauli, the total IS the interaction depth (no FP).
+    Three methods compared side-by-side for each N = L^2:
+      0  FP w/o ancillas   (ours)
+      1  FP w/ ancillas
+      2  FSWAP baseline
+
+    Light pastel fills matching each method's identity color;
+    markers on bar tops; single unified legend.
+
+    Font sizes (matching exp2):
+      title 16, axis labels 14, tick labels 14, legend 9.  All bold.
     """
     _setup_style()
+
     k_val = _primary_k(df)
     df_k = df[df["k"] == k_val]
     p_min = df_k["p_2q"].min()
     df_sub = df_k[df_k["p_2q"] == p_min]
 
-    # Focus on N >= 36 (L >= 6) for clearer scaling
-    df_sub = df_sub[df_sub["N"] >= 36]
+    # -- Aggregate mean depths per method per N ---------------------------------
+    methods = ["pipelined", "ancilla", "1d"]   # ours, with ancilla, baseline
+    N_values = sorted(df_sub["N"].unique())
 
-    fig, ax = plt.subplots(figsize=(8, 5.5))
+    depth_data = {}   # total cnot_depth
+    rot_data   = {}   # interaction_cnot_depth (local rotations)
+    for bl in methods:
+        bdf = df_sub[df_sub["baseline"] == bl]
+        tot_vals, rot_vals = [], []
+        for N in N_values:
+            ndf = bdf[bdf["N"] == N]
+            tot_vals.append(ndf["cnot_depth"].mean() if not ndf.empty else 0)
+            rot_vals.append(ndf["interaction_cnot_depth"].mean() if not ndf.empty else 0)
+        depth_data[bl] = np.array(tot_vals)
+        rot_data[bl]   = np.array(rot_vals)
 
-    # Plot total depth for each method
-    data_total = _aggregate(df_sub, "cnot_depth")
-    for baseline in PLOT_BASELINES:
-        if baseline not in data_total:
-            continue
-        d = data_total[baseline]
-        style = BASELINE_STYLES[baseline]
-        ax.errorbar(d["N"], d["mean"], yerr=d["std"],
-                     color=style["color"], marker=style["marker"],
-                     label=style["label"], capsize=3, linewidth=1.8)
+    # -- Light pastel palette (based on BASELINE_STYLES identity colors) -------
+    #   pipelined  #d62728 (red)   -> light rose
+    #   ancilla    #1f77b4 (blue)  -> light sky
+    #   1d         #555555 (gray)  -> light silver
+    method_cfg = [
+        ("FP w/o ancillas", "o", "#d62728", "#f0b0b0"),   # red marker, rose fill
+        ("FP w/ ancillas",  "^", "#1f77b4", "#a8cee8"),   # blue marker, sky fill
+        ("FSWAP baseline",  "s", "#555555", "#c8c8c8"),   # gray marker, silver fill
+    ]
 
-    # Plot shared interaction depth (use any FP baseline, they're identical)
-    fp_baseline = "pipelined"
-    bdf = df_sub[df_sub["baseline"] == fp_baseline]
-    if not bdf.empty:
-        grouped = bdf.groupby("L")["interaction_cnot_depth"]
-        L_vals = grouped.mean().index.values
-        N_vals = L_vals ** 2
-        int_mean = grouped.mean().values
-        int_std = grouped.std().values
-        ax.errorbar(N_vals, int_mean, yerr=int_std,
-                     color="#888888", marker="x", linestyle="--",
-                     label="Local Rotations", capsize=3, linewidth=1.5,
-                     alpha=0.8)
+    # -- Bar layout ------------------------------------------------------------
+    bar_w   = 0.15
+    gap     = 0.025
+    step    = bar_w + gap
+    offsets = [-step, 0.0, step]
+    x       = np.arange(len(N_values))
 
-    # Crossover vertical line where FP w/o ancillas becomes best
-    N_cross = _find_pipelined_crossover_N(data_total, lower_is_better=True)
-    if N_cross is not None:
-        _draw_crossover(ax, N_cross, ax.get_ylim()[0])
+    fig, ax = plt.subplots(figsize=(max(9, len(N_values) * 1.8 + 1), 5.5))
 
-    # Asymptotic guide lines
-    Ns = np.array(sorted(df_sub["N"].unique()), dtype=float)
-    ax.loglog(Ns, 60.0 * Ns, "--", color="gray", alpha=0.4,
-              label=r"$\propto N$")
-    ax.loglog(Ns, 800.0 * np.sqrt(Ns), ":", color="gray", alpha=0.4,
-              label=r"$\propto \sqrt{N}$")
+    # -- Local rotation overlay color ------------------------------------------
+    _c_rot = "#ffe040"   # bright yellow — visible on any pastel
 
-    ax.set_xlabel(r"$N = L^2$")
-    ax.set_ylabel("CNOT Depth Per Trotter Step")
-    ax.set_title(f"Depth Breakdown Trend (k={k_val})")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.legend(fontsize=9)
-    ax.grid(True, which="major", alpha=0.3)
-    fig.tight_layout()
-    _save_fig(fig, "depth_breakdown_trend", output_dir)
+    bar_tops = []
+    legend_handles = []
+    for i, bl in enumerate(methods):
+        label, marker, mc, fc = method_cfg[i]
+        xpos = x + offsets[i]
+
+        # Full-height bar (total depth)
+        ax.bar(xpos, depth_data[bl], bar_w, color=fc,
+               edgecolor=mc, linewidth=0.6, label="_nolegend_")
+
+        # Local rotation overlay at the bottom
+        ax.bar(xpos, rot_data[bl], bar_w, color=_c_rot,
+               edgecolor="none", label="_nolegend_")
+
+        tops = depth_data[bl]
+        h = ax.scatter(xpos, tops, marker=marker, color=mc, s=20, zorder=5,
+                       label=label)
+        legend_handles.append(h)
+        bar_tops.append(tops)
+
+    # -- Axes & labels ---------------------------------------------------------
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(N) for N in N_values], rotation=45, ha="right",
+                       fontsize=16, fontweight="bold")
+    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=16)
+    ax.set_ylabel(r"$\mathbf{CNOT\;depth}$", fontsize=16)
+    ax.set_title(r"$\mathbf{SYK\;Trotter\;Step\;—\;Depth\;Breakdown}$",
+                 fontsize=18)
+    ax.tick_params(axis="both", labelsize=16)
+    ax.ticklabel_format(axis="y", style="scientific", scilimits=(0, 0))
+    ax.yaxis.get_offset_text().set_fontsize(14)
+    ax.yaxis.get_offset_text().set_fontweight("bold")
+    for lbl in ax.get_yticklabels():
+        lbl.set_fontweight("bold")
+
+    # -- Single legend: methods + local rotation indicator ----------------------
+    import matplotlib.patches as mpatches
+    rot_patch = mpatches.Patch(facecolor=_c_rot, edgecolor="none",
+                               label="Local Rotation")
+    all_handles = legend_handles + [rot_patch]
+    ax.legend(handles=all_handles, fontsize=11, ncol=1, framealpha=0.9,
+              scatterpoints=1, handletextpad=0.3,
+              loc="upper left", bbox_to_anchor=(0.01, 0.98),
+              prop={"weight": "bold"})
+
+    _save_fig(fig, "depth_breakdown", output_dir)
 
 
 def plot_colors_vs_N(
@@ -387,6 +428,6 @@ def generate_all_plots(
     print(f"Generating plots in {output_dir}/")
     plot_spacetime_vs_N(df, output_dir)
     plot_fidelity_vs_N(df, output_dir)
-    plot_depth_breakdown_trend(df, output_dir)
+    plot_depth_breakdown(df, output_dir)
     plot_colors_vs_N(df, output_dir, colors_df=colors_df)
     print("All plots saved.")
