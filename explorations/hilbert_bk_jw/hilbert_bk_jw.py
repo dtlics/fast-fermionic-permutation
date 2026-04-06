@@ -21,6 +21,26 @@ from matplotlib.collections import LineCollection
 
 FIGURES_DIR = Path(__file__).parent / "figures"
 
+# Vibrant-but-mild qualitative palette (no grays — gray is reserved for unused cells).
+INTERVAL_PALETTE = [
+    (0.55, 0.83, 0.78, 1.0),  # teal
+    (1.00, 0.73, 0.47, 1.0),  # peach
+    (0.75, 0.73, 0.85, 1.0),  # lavender
+    (0.98, 0.50, 0.45, 1.0),  # coral
+    (0.50, 0.69, 0.83, 1.0),  # steel blue
+    (0.99, 0.71, 0.80, 1.0),  # rose
+    (0.70, 0.87, 0.54, 1.0),  # soft green
+    (0.99, 0.85, 0.47, 1.0),  # golden
+    (0.85, 0.60, 0.70, 1.0),  # mauve
+    (0.58, 0.77, 0.64, 1.0),  # sage
+    (0.80, 0.58, 0.46, 1.0),  # sienna
+    (0.55, 0.63, 0.80, 1.0),  # periwinkle
+    (0.90, 0.56, 0.67, 1.0),  # dusty pink
+    (0.65, 0.85, 0.73, 1.0),  # mint
+    (0.85, 0.75, 0.55, 1.0),  # tan
+    (0.60, 0.75, 0.90, 1.0),  # sky blue
+]
+
 # ---------------------------------------------------------------------------
 # Section A: Balanced BST and BK→JW round generation
 # ---------------------------------------------------------------------------
@@ -162,30 +182,26 @@ def precompute_hilbert(L: int) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def plot_round(
+def _render_round_on_ax(
+    ax,
     round_pairs: list[tuple[int, int]],
     round_idx: int,
     total_rounds: int,
     N: int,
     L: int,
     coords: np.ndarray,
-    output_dir: Path,
-):
-    """Plot one round of CNOT intervals on the Hilbert-curve grid."""
+) -> int:
+    """Render one round of CNOT intervals onto *ax*. Returns max_interval."""
     num_intervals = len(round_pairs)
-    # Generate distinct colors via HSV.
-    cmap = plt.cm.hsv
-    colors = [cmap(i / max(num_intervals, 1)) for i in range(num_intervals)]
-
-    figsize = (7, 7) if L <= 16 else (9, 9)
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    colors = [INTERVAL_PALETTE[i % len(INTERVAL_PALETTE)] for i in range(num_intervals)]
 
     # Build RGBA grid: start white.
     grid = np.ones((L, L, 4), dtype=float)
 
-    # Mark unused cell (index N = L*L - 1) as light gray.
-    ux, uy = coords[N]
-    grid[uy, ux] = [0.85, 0.85, 0.85, 1.0]
+    # Mark unused cells (indices N .. L*L-1) as light gray.
+    for u in range(N, L * L):
+        ux, uy = coords[u]
+        grid[uy, ux] = [0.85, 0.85, 0.85, 1.0]
 
     # Color intervals and collect edge segments.
     max_interval = 0
@@ -197,12 +213,10 @@ def plot_round(
         max_interval = max(max_interval, interval_len)
         color = colors[idx]
 
-        # Fill cells.
         for i in range(a, b + 1):
             cx, cy = coords[i]
             grid[cy, cx] = color
 
-        # Edge segments along the Hilbert curve within the interval.
         for i in range(a, b):
             x1, y1 = coords[i]
             x2, y2 = coords[i + 1]
@@ -249,17 +263,64 @@ def plot_round(
     ax.set_yticks([])
     ax.set_title(
         f"Round {round_idx + 1}/{total_rounds}  |  "
-        f"max interval = {max_interval}  |  "
-        f"N = {N}, {L}×{L}",
+        f"max interval = {max_interval}",
         fontsize=12,
+    )
+
+    return max_interval
+
+
+def plot_round(
+    round_pairs: list[tuple[int, int]],
+    round_idx: int,
+    total_rounds: int,
+    N: int,
+    L: int,
+    coords: np.ndarray,
+    output_dir: Path,
+):
+    """Plot one round of CNOT intervals on the Hilbert-curve grid."""
+    figsize = (7, 7) if L <= 16 else (9, 9)
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+
+    max_interval = _render_round_on_ax(
+        ax, round_pairs, round_idx, total_rounds, N, L, coords,
     )
 
     fig.tight_layout()
     stem = f"round_{round_idx + 1:02d}_N{N}"
-    fig.savefig(output_dir / f"{stem}.png", dpi=200, bbox_inches="tight")
-    fig.savefig(output_dir / f"{stem}.pdf", bbox_inches="tight")
+    fig.savefig(output_dir / f"{stem}.svg", bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved {stem} (max interval {max_interval})")
+
+
+def plot_all_rounds(
+    all_rounds: list[list[tuple[int, int]]],
+    N: int,
+    L: int,
+    coords: np.ndarray,
+    output_dir: Path,
+    k: int,
+):
+    """Plot all rounds side-by-side in a single figure."""
+    num_rounds = len(all_rounds)
+    fig, axes = plt.subplots(1, num_rounds, figsize=(5 * num_rounds, 5))
+    if num_rounds == 1:
+        axes = [axes]
+
+    for r_idx, rnd in enumerate(all_rounds):
+        _render_round_on_ax(axes[r_idx], rnd, r_idx, num_rounds, N, L, coords)
+
+    fig.suptitle(
+        f"BK→JW CNOT rounds:  k = {k},  N = {N},  {L}×{L} grid",
+        fontsize=14,
+        y=1.02,
+    )
+    fig.tight_layout()
+    stem = f"all_rounds_k{k}_N{N}"
+    fig.savefig(output_dir / f"{stem}.svg", bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved {stem}.svg ({num_rounds} rounds)")
 
 
 # ---------------------------------------------------------------------------
@@ -318,13 +379,25 @@ def main():
 
     os.makedirs(FIGURES_DIR, exist_ok=True)
 
+    import math
+
+    # Combined subfigures for even k values (L² = N+1, tight fit).
+    for k_small in [4, 6]:
+        N_s = 2**k_small - 1
+        L_s = 2 ** (k_small // 2)
+        print(f"\nGenerating combined plot for k={k_small}, N={N_s}, grid={L_s}×{L_s}")
+        rounds_1based_s = generate_bk_jw_rounds(k_small)
+        rounds_s = [[(a - 1, b - 1) for a, b in rnd] for rnd in rounds_1based_s]
+        coords_s = precompute_hilbert(L_s)
+        plot_all_rounds(rounds_s, N_s, L_s, coords_s, FIGURES_DIR, k_small)
+
+    # Individual round plots for k=10.
     for k in [10]:
         N = 2**k - 1
         L = 2 ** (k // 2)
         print(f"\nGenerating plots for k={k}, N={N}, grid={L}×{L}")
 
         rounds_1based = generate_bk_jw_rounds(k)
-        # Shift to 0-based.
         rounds = [[(a - 1, b - 1) for a, b in rnd] for rnd in rounds_1based]
 
         coords = precompute_hilbert(L)
