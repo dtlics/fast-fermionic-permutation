@@ -254,24 +254,23 @@ def plot_fidelity_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
             continue
         ax.plot(d["N"][mask], d["mean"][mask],
                 color=style["color"], marker=style["marker"],
-                label=style["label"], linewidth=1.5, markersize=5)
+                label=style["label"], linewidth=2.5, markersize=6)
 
     # Crossover vertical line where FP w/o ancillas becomes best
     N_cross = _find_pipelined_crossover_N(data)
     if N_cross is not None:
         _draw_crossover(ax, N_cross, y_floor)
 
-    ax.set_xlabel(r"$N = L^2$")
-    ax.set_ylabel("Fidelity estimate")
-    # Format p in the title with one significant figure of the exponent
-    p_exp = np.log10(p_2q)
-    ax.set_title(f"k={k_val}, p = {p_2q:.1e}")
+    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=14)
+    ax.set_ylabel(r"$\mathbf{Fidelity\;estimate}$", fontsize=14)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_ylim(bottom=y_floor, top=2.0)
-    ax.legend(fontsize=8)
+    ax.tick_params(axis="both", labelsize=14)
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontweight("bold")
+    ax.legend(fontsize=9, prop={"weight": "bold"})
     ax.grid(True, which="major", alpha=0.3)
-    fig.suptitle(r"Estimated Fidelity $(1-p)^G$ — Per Trotter Step", y=1.02)
     fig.tight_layout()
     _save_fig(fig, "fidelity_vs_N", output_dir)
 
@@ -361,8 +360,6 @@ def plot_depth_breakdown(df: pd.DataFrame, output_dir: str = "exp3_syk/figures")
                        fontsize=16, fontweight="bold")
     ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=16)
     ax.set_ylabel(r"$\mathbf{CNOT\;depth}$", fontsize=16)
-    ax.set_title(r"$\mathbf{SYK\;Trotter\;Step\;—\;Depth\;Breakdown}$",
-                 fontsize=18)
     ax.tick_params(axis="both", labelsize=16)
     ax.ticklabel_format(axis="y", style="scientific", scilimits=(0, 0))
     ax.yaxis.get_offset_text().set_fontsize(14)
