@@ -262,15 +262,15 @@ def plot_fidelity_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
     if N_cross is not None:
         _draw_crossover(ax, N_cross, y_floor)
 
-    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=16)
-    ax.set_ylabel(r"$\mathbf{Fidelity\;estimate}$", fontsize=16)
+    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=18)
+    ax.set_ylabel(r"$\mathbf{Fidelity\;estimate}$", fontsize=18)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_ylim(bottom=y_floor, top=2.0)
-    ax.tick_params(axis="both", labelsize=16)
+    ax.tick_params(axis="both", labelsize=15)
     for lbl in ax.get_xticklabels() + ax.get_yticklabels():
         lbl.set_fontweight("bold")
-    ax.legend(markerscale=1.5, prop={"weight": "bold", "size": 11})
+    ax.legend(markerscale=1.5, prop={"weight": "bold", "size": 13})
     ax.grid(True, which="major", alpha=0.3)
     fig.tight_layout()
     _save_fig(fig, "fidelity_vs_N", output_dir)

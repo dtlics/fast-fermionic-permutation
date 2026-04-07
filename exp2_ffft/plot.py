@@ -189,7 +189,7 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
                 continue
             ax.semilogy(data["N"], data["mult_fidelity"],
                         marker=style["marker"], color=style["color"],
-                        label=style["label"], linewidth=1.5, markersize=5)
+                        label=style["label"], linewidth=2.5, markersize=6)
 
         # Ancilla variant (computed on-the-fly)
         anc_N = [L * L for L in L_all]
@@ -199,21 +199,19 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
             ns, fs = zip(*anc_N_f)
             ax.semilogy(ns, fs, marker="P", color="C0",
                         label="Gamma-FP-FFFT w/ ancillas",
-                        linewidth=1.5, markersize=5)
+                        linewidth=2.5, markersize=6)
 
-        ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=14)
-        ax.set_title(f"$\\mathbf{{p_{{2q}} = {p_2q:.0e}}}$", fontsize=14)
-        ax.tick_params(axis="both", labelsize=12)
+        ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=18)
+        ax.set_title(f"$\\mathbf{{p_{{2q}} = {p_2q:.0e}}}$", fontsize=19)
+        ax.tick_params(axis="both", labelsize=15)
         for lbl in ax.get_xticklabels() + ax.get_yticklabels():
             lbl.set_fontweight("bold")
         ax.grid(True, alpha=0.2)
 
     axes[0].set_ylim(bottom=y_floor, top=2.0)
-    axes[0].set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=14)
-    axes[-1].legend(loc="lower left", framealpha=0.9, fontsize=12,
-                    prop={"weight": "bold"})
-    fig.suptitle(r"$\mathbf{Estimated\;Fidelity\;(1-p)^G}$",
-                 fontsize=16, y=1.02, fontweight="bold")
+    axes[0].set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=18)
+    axes[-1].legend(loc="lower left", framealpha=0.9,
+                    prop={"weight": "bold", "size": 13})
     fig.tight_layout()
     _save_fig(fig, fig_dir, "fidelity_vs_N")
 
