@@ -262,7 +262,7 @@ def _render_round_on_ax(
         )
     hilbert_lc = LineCollection(
         hilbert_segs, colors="#404040",
-        linewidths=2.0 if L <= 16 else 1.2,
+        linewidths=1.2 if L <= 16 else 0.7,
     )
     hilbert_lc.set_zorder(2)
     ax.add_collection(hilbert_lc)
@@ -275,7 +275,7 @@ def _render_round_on_ax(
     ax.set_title(
         f"Round {round_idx + 1}/{total_rounds}  |  "
         f"max interval = {max_interval}",
-        fontsize=12,
+        fontsize=16, fontweight="bold",
     )
 
     return max_interval
@@ -322,11 +322,7 @@ def plot_all_rounds(
     for r_idx, rnd in enumerate(all_rounds):
         _render_round_on_ax(axes[r_idx], rnd, r_idx, num_rounds, N, L, coords)
 
-    fig.suptitle(
-        f"BK→JW CNOT rounds:  k = {k},  N = {N},  {L}×{L} grid",
-        fontsize=14,
-        y=1.02,
-    )
+    # Big title removed; each subplot has its own title.
     fig.tight_layout()
     stem = f"all_rounds_k{k}_N{N}"
     fig.savefig(output_dir / f"{stem}.svg", bbox_inches="tight")
