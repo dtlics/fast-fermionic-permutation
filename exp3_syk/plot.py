@@ -170,8 +170,9 @@ def _draw_crossover(ax, N_cross: float, y_pos: float):
     """Draw a vertical crossover guide line with N label."""
     ax.axvline(N_cross, color="gray", linestyle=":", alpha=0.5)
     ax.annotate(f"N={int(N_cross)}", xy=(N_cross, y_pos),
-                fontsize=7, color="gray", ha="center", va="bottom",
-                xytext=(0, 2), textcoords="offset points")
+                fontsize=14, fontweight="bold", color="gray",
+                ha="center", va="bottom",
+                xytext=(0, 4), textcoords="offset points")
 
 
 def _find_fidelity_p(df_k: pd.DataFrame, target_frac: float = 0.80,
@@ -261,15 +262,15 @@ def plot_fidelity_vs_N(df: pd.DataFrame, output_dir: str = "exp3_syk/figures"):
     if N_cross is not None:
         _draw_crossover(ax, N_cross, y_floor)
 
-    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=14)
-    ax.set_ylabel(r"$\mathbf{Fidelity\;estimate}$", fontsize=14)
+    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=16)
+    ax.set_ylabel(r"$\mathbf{Fidelity\;estimate}$", fontsize=16)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_ylim(bottom=y_floor, top=2.0)
-    ax.tick_params(axis="both", labelsize=14)
+    ax.tick_params(axis="both", labelsize=16)
     for lbl in ax.get_xticklabels() + ax.get_yticklabels():
         lbl.set_fontweight("bold")
-    ax.legend(fontsize=9, prop={"weight": "bold"})
+    ax.legend(markerscale=1.5, prop={"weight": "bold", "size": 11})
     ax.grid(True, which="major", alpha=0.3)
     fig.tight_layout()
     _save_fig(fig, "fidelity_vs_N", output_dir)
@@ -357,12 +358,12 @@ def plot_depth_breakdown(df: pd.DataFrame, output_dir: str = "exp3_syk/figures")
     # -- Axes & labels ---------------------------------------------------------
     ax.set_xticks(x)
     ax.set_xticklabels([str(N) for N in N_values], rotation=45, ha="right",
-                       fontsize=16, fontweight="bold")
-    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=16)
-    ax.set_ylabel(r"$\mathbf{CNOT\;depth}$", fontsize=16)
-    ax.tick_params(axis="both", labelsize=16)
+                       fontsize=24, fontweight="bold")
+    ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=24)
+    ax.set_ylabel(r"$\mathbf{CNOT\;depth}$", fontsize=24)
+    ax.tick_params(axis="both", labelsize=24)
     ax.ticklabel_format(axis="y", style="scientific", scilimits=(0, 0))
-    ax.yaxis.get_offset_text().set_fontsize(14)
+    ax.yaxis.get_offset_text().set_fontsize(22)
     ax.yaxis.get_offset_text().set_fontweight("bold")
     for lbl in ax.get_yticklabels():
         lbl.set_fontweight("bold")
@@ -372,10 +373,10 @@ def plot_depth_breakdown(df: pd.DataFrame, output_dir: str = "exp3_syk/figures")
     rot_patch = mpatches.Patch(facecolor=_c_rot, edgecolor="none",
                                label="Local Rotation")
     all_handles = legend_handles + [rot_patch]
-    ax.legend(handles=all_handles, fontsize=11, ncol=1, framealpha=0.9,
-              scatterpoints=1, handletextpad=0.3,
+    ax.legend(handles=all_handles, ncol=1, framealpha=0.9,
+              scatterpoints=1, handletextpad=0.3, markerscale=3,
               loc="upper left", bbox_to_anchor=(0.01, 0.98),
-              prop={"weight": "bold"})
+              prop={"weight": "bold", "size": 18})
 
     _save_fig(fig, "depth_breakdown", output_dir)
 
