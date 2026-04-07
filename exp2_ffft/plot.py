@@ -171,27 +171,25 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
                 p_2q=p_2q, p_idle=p_idle)
             anc_fidelity[(L, p_2q)] = fid
 
-    fig, axes = plt.subplots(1, len(p_values),
-                              figsize=(5 * len(p_values), 4.2), sharey=True)
+    fig, axes = plt.subplots(len(p_values), 1,
+                              figsize=(7, 4.2 * len(p_values)))
     if len(p_values) == 1:
         axes = [axes]
 
-    for ax, p_2q in zip(axes, p_values):
+    for idx, (ax, p_2q) in enumerate(zip(axes, p_values)):
         sub = df[df["p_2q"] == p_2q]
 
-        # Existing methods from CSV
-        for method, style in METHOD_STYLES.items():
-            if method not in _PLOT_METHODS:
-                continue
-            data = sub[sub["method"] == method].sort_values("N")
-            data = data[data["mult_fidelity"] >= y_floor]
-            if data.empty:
-                continue
-            ax.semilogy(data["N"], data["mult_fidelity"],
-                        marker=style["marker"], color=style["color"],
-                        label=style["label"], linewidth=2.5, markersize=6)
+        # Plot in explicit order: CT-FFFT, w/ ancillas, w/o ancillas
+        # 1) CT-FFFT
+        ct_style = METHOD_STYLES["1d_baseline"]
+        ct_data = sub[sub["method"] == "1d_baseline"].sort_values("N")
+        ct_data = ct_data[ct_data["mult_fidelity"] >= y_floor]
+        if not ct_data.empty:
+            ax.semilogy(ct_data["N"], ct_data["mult_fidelity"],
+                        marker=ct_style["marker"], color=ct_style["color"],
+                        label=ct_style["label"], linewidth=2.5, markersize=6)
 
-        # Ancilla variant (computed on-the-fly)
+        # 2) Gamma-FP-FFFT w/ ancillas
         anc_N = [L * L for L in L_all]
         anc_f = [anc_fidelity[(L, p_2q)] for L in L_all]
         anc_N_f = [(n, f) for n, f in zip(anc_N, anc_f) if f >= y_floor]
@@ -201,17 +199,32 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
                         label="Gamma-FP-FFFT w/ ancillas",
                         linewidth=2.5, markersize=6)
 
-        ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=18)
+        # 3) Gamma-FP-FFFT w/o ancillas
+        gp_style = METHOD_STYLES["gamma_2d_proper"]
+        gp_data = sub[sub["method"] == "gamma_2d_proper"].sort_values("N")
+        gp_data = gp_data[gp_data["mult_fidelity"] >= y_floor]
+        if not gp_data.empty:
+            ax.semilogy(gp_data["N"], gp_data["mult_fidelity"],
+                        marker=gp_style["marker"], color=gp_style["color"],
+                        label=gp_style["label"], linewidth=2.5, markersize=6)
+
+        ax.set_ylim(bottom=y_floor, top=2.0)
+        ax.set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=18)
         ax.set_title(f"$\\mathbf{{p_{{2q}} = {p_2q:.0e}}}$", fontsize=19)
         ax.tick_params(axis="both", labelsize=15)
         for lbl in ax.get_xticklabels() + ax.get_yticklabels():
             lbl.set_fontweight("bold")
         ax.grid(True, alpha=0.2)
 
-    axes[0].set_ylim(bottom=y_floor, top=2.0)
-    axes[0].set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=18)
-    axes[-1].legend(loc="lower left", framealpha=0.9,
-                    prop={"weight": "bold", "size": 13})
+        # Only show x-label on the bottom panel
+        if idx < len(p_values) - 1:
+            ax.set_xlabel("")
+            ax.tick_params(axis="x", labelbottom=False)
+        else:
+            ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=18)
+
+    axes[0].legend(loc="lower left", framealpha=0.9,
+                   prop={"weight": "bold", "size": 13})
     fig.tight_layout()
     _save_fig(fig, fig_dir, "fidelity_vs_N")
 
@@ -435,7 +448,7 @@ def plot_depth_breakdown(df: pd.DataFrame, fig_dir: str):
     offsets = [-2*step, -step, 0.0, step, 2*step]
     x       = np.arange(len(L_values))
 
-    fig, ax = plt.subplots(figsize=(max(9, len(L_values) * 1.8 + 1), 5.5))
+    fig, ax = plt.subplots(figsize=(max(7, len(L_values) * 1.44 + 0.8), 7))
 
     all_methods = [
         (fp1d_info,      fp1d_depths),       # M0 – FP-FFFT FSWAP baseline
