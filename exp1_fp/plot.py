@@ -38,15 +38,15 @@ PLOT_BASELINES = ["1d", "ancilla", "pipelined"]
 
 def _setup_style():
     plt.rcParams.update({
-        "font.size": 13,
+        "font.size": 11,
         "font.weight": "bold",
-        "axes.labelsize": 16,
+        "axes.labelsize": 14,
         "axes.labelweight": "bold",
-        "axes.titlesize": 17,
+        "axes.titlesize": 15,
         "axes.titleweight": "bold",
-        "legend.fontsize": 12,
-        "xtick.labelsize": 13,
-        "ytick.labelsize": 13,
+        "legend.fontsize": 10,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
         "figure.dpi": 150,
         "savefig.dpi": 300,
         "savefig.bbox": "tight",
@@ -135,15 +135,15 @@ def plot_depth_vs_L(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
             if d["std"] is not None:
                 ax.errorbar(N_vals, d["mean"], yerr=d["std"],
                             color=style["color"], marker=style["marker"],
-                            label=style["label"], capsize=3, linewidth=2.5, markersize=6)
+                            label=style["label"], capsize=3, linewidth=2, markersize=5)
             else:
                 ax.plot(N_vals, d["mean"],
                         color=style["color"], marker=style["marker"],
-                        label=style["label"], linewidth=2.5, markersize=6)
+                        label=style["label"], linewidth=2, markersize=5)
 
         ax.set_xlabel(r"$N = L^2$")
         ax.set_title(PERM_TITLES[kind])
-        ax.legend(fontsize=11)
+        ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
 
     _shared_y_row(axes, 0, n_cols, "CNOT depth")
@@ -179,22 +179,22 @@ def plot_spacetime_vs_N(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
             if d["std"] is not None:
                 ax.errorbar(N_vals, d["mean"], yerr=d["std"],
                             color=style["color"], marker=style["marker"],
-                            label=style["label"], capsize=3, linewidth=2.5, markersize=6)
+                            label=style["label"], capsize=3, linewidth=2, markersize=5)
             else:
                 ax.plot(N_vals, d["mean"],
                         color=style["color"], marker=style["marker"],
-                        label=style["label"], linewidth=2.5, markersize=6)
+                        label=style["label"], linewidth=2, markersize=5)
 
         ax.set_xlabel(r"$N = L^2$")
         ax.set_title(PERM_TITLES[kind])
-        ax.legend(fontsize=11)
+        ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
 
     # Shared y-axis with scientific notation.
     _shared_y_row(axes, 0, n_cols, "Spacetime volume")
     for col in range(n_cols):
         axes[0, col].ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-    axes[0, 0].yaxis.get_offset_text().set_fontsize(11)
+    axes[0, 0].yaxis.get_offset_text().set_fontsize(9)
 
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.05)
@@ -218,7 +218,7 @@ def plot_stim_fidelity(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
     n_cols = len(perm_kinds)
 
     fig, axes = plt.subplots(len(p_values), n_cols,
-                             figsize=(4.2 * n_cols, 3 * len(p_values)),
+                             figsize=(4.91 * n_cols, 2.31 * len(p_values)),
                              squeeze=False)
 
     for row, p_2q in enumerate(p_values):
@@ -244,25 +244,50 @@ def plot_stim_fidelity(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
                 max_N_in_row = max(max_N_in_row, N_vals.max())
                 ax.plot(N_vals, y_vals,
                         color=style["color"], marker=style["marker"],
-                        label=style["label"], linewidth=2.5, markersize=6)
+                        label=style["label"], linewidth=2, markersize=5)
 
             ax.set_yscale("log")
-            ax.set_xlabel(r"$N = L^2$")
+            ax.set_xlabel("")
             ax.set_title(f"{PERM_TITLES[kind]}, p = {p_2q:.0e}")
             ax.grid(True, alpha=0.3)
 
         # Shared y per row, tailored to middle subplot.
         _shared_y_row(axes, row, n_cols, "Fidelity (Stim)")
 
+        # First row: use plain decimals (0.2, 0.6) instead of scientific
+        if row == 0:
+            from matplotlib.ticker import FixedLocator, ScalarFormatter
+            for col in range(n_cols):
+                ax = axes[row, col]
+                ax.yaxis.set_major_locator(FixedLocator([0.2, 0.3, 0.4, 0.6, 1.0]))
+                ax.yaxis.set_major_formatter(ScalarFormatter())
+                ax.yaxis.get_major_formatter().set_scientific(False)
+
         # Tailor x-range to effective (non-zero) data for this row.
         if max_N_in_row > 0:
             for col in range(n_cols):
                 axes[row, col].set_xlim(left=None, right=max_N_in_row * 1.05)
 
-        axes[row, 0].legend(fontsize=11)
+        axes[row, 0].legend(fontsize=9)
+
+        # "N = L²" at the bottom-right corner, below and right of ticks
+        ax_right = axes[row, n_cols - 1]
+        ax_right.annotate(
+            r"$N\!=\!L^2$", xy=(1, 0), xycoords="axes fraction",
+            xytext=(20, -6), textcoords="offset points",
+            ha="right", va="top", fontweight="bold",
+            fontsize=ax_right.xaxis.get_ticklabels()[0].get_fontsize(),
+            annotation_clip=False,
+        )
 
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.05)
+
+    # Align y-axis labels across all rows to the same horizontal position
+    label_x = -0.12
+    for row in range(len(p_values)):
+        axes[row, 0].yaxis.set_label_coords(label_x, 0.5)
+
     _save_fig(fig, "stim_fidelity", output_dir)
 
 
