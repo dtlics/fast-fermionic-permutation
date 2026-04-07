@@ -135,19 +135,18 @@ def plot_depth_vs_L(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
             if d["std"] is not None:
                 ax.errorbar(N_vals, d["mean"], yerr=d["std"],
                             color=style["color"], marker=style["marker"],
-                            label=style["label"], capsize=3, linewidth=1.5)
+                            label=style["label"], capsize=3, linewidth=2.5, markersize=6)
             else:
                 ax.plot(N_vals, d["mean"],
                         color=style["color"], marker=style["marker"],
-                        label=style["label"], linewidth=1.5)
+                        label=style["label"], linewidth=2.5, markersize=6)
 
         ax.set_xlabel(r"$N = L^2$")
         ax.set_title(PERM_TITLES[kind])
-        ax.legend()
+        ax.legend(fontsize=11)
         ax.grid(True, alpha=0.3)
 
     _shared_y_row(axes, 0, n_cols, "CNOT depth")
-    fig.suptitle("CNOT Depth", y=1.02)
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.05)
     _save_fig(fig, "depth_vs_L", output_dir)
@@ -180,24 +179,23 @@ def plot_spacetime_vs_N(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
             if d["std"] is not None:
                 ax.errorbar(N_vals, d["mean"], yerr=d["std"],
                             color=style["color"], marker=style["marker"],
-                            label=style["label"], capsize=3, linewidth=1.5)
+                            label=style["label"], capsize=3, linewidth=2.5, markersize=6)
             else:
                 ax.plot(N_vals, d["mean"],
                         color=style["color"], marker=style["marker"],
-                        label=style["label"], linewidth=1.5)
+                        label=style["label"], linewidth=2.5, markersize=6)
 
         ax.set_xlabel(r"$N = L^2$")
         ax.set_title(PERM_TITLES[kind])
-        ax.legend()
+        ax.legend(fontsize=11)
         ax.grid(True, alpha=0.3)
 
     # Shared y-axis with scientific notation.
     _shared_y_row(axes, 0, n_cols, "Spacetime volume")
     for col in range(n_cols):
         axes[0, col].ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-    axes[0, 0].yaxis.get_offset_text().set_fontsize(9)
+    axes[0, 0].yaxis.get_offset_text().set_fontsize(11)
 
-    fig.suptitle("Spacetime Volume", y=1.02)
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.05)
     _save_fig(fig, "spacetime_vs_N", output_dir)
