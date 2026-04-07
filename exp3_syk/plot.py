@@ -411,7 +411,15 @@ def plot_depth_breakdown(df: pd.DataFrame, output_dir: str = "exp3_syk/figures")
 
         mid_y = 0.125 * y0 + 0.75 * required_h + 0.125 * y1
         text_offset = 0.015 * local_max
-        ax.text(xm, mid_y + text_offset, f"{reduction:.0f}%",
+        # Shift text right for larger N to avoid crowding
+        N = N_values[i]
+        if N >= 576:
+            x_shift = 0.24
+        elif N >= 400:
+            x_shift = 0.12
+        else:
+            x_shift = 0.0
+        ax.text(xm + x_shift, mid_y + text_offset, f"{reduction:.0f}%",
                 ha="center", va="bottom",
                 fontsize=24, fontweight="bold", color="#555555")
 
