@@ -26,7 +26,7 @@ BASELINE_STYLES = {
 PERM_TITLES = {
     "reverse": "Reversal",
     "transpose": "2D Reflection",
-    "random": "Random (mean \u00b1 std)",
+    "random": "Random",
 }
 
 # Full list (used for data aggregation, keeps primitive in the CSV).
@@ -38,10 +38,15 @@ PLOT_BASELINES = ["1d", "ancilla", "pipelined"]
 
 def _setup_style():
     plt.rcParams.update({
-        "font.size": 11,
-        "axes.labelsize": 12,
-        "axes.titlesize": 13,
-        "legend.fontsize": 9,
+        "font.size": 13,
+        "font.weight": "bold",
+        "axes.labelsize": 16,
+        "axes.labelweight": "bold",
+        "axes.titlesize": 17,
+        "axes.titleweight": "bold",
+        "legend.fontsize": 12,
+        "xtick.labelsize": 13,
+        "ytick.labelsize": 13,
         "figure.dpi": 150,
         "savefig.dpi": 300,
         "savefig.bbox": "tight",
@@ -241,7 +246,7 @@ def plot_stim_fidelity(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
                 max_N_in_row = max(max_N_in_row, N_vals.max())
                 ax.plot(N_vals, y_vals,
                         color=style["color"], marker=style["marker"],
-                        label=style["label"], linewidth=1.5, markersize=5)
+                        label=style["label"], linewidth=2.5, markersize=6)
 
             ax.set_yscale("log")
             ax.set_xlabel(r"$N = L^2$")
@@ -256,9 +261,8 @@ def plot_stim_fidelity(df: pd.DataFrame, output_dir: str = "exp1_fp/figures"):
             for col in range(n_cols):
                 axes[row, col].set_xlim(left=None, right=max_N_in_row * 1.05)
 
-        axes[row, 0].legend(fontsize=8)
+        axes[row, 0].legend(fontsize=11)
 
-    fig.suptitle("Stim Fidelity", y=1.01)
     fig.tight_layout()
     fig.subplots_adjust(wspace=0.05)
     _save_fig(fig, "stim_fidelity", output_dir)
