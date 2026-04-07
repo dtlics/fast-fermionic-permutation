@@ -438,27 +438,27 @@ def plot_depth_breakdown(df: pd.DataFrame, fig_dir: str):
     fig, ax = plt.subplots(figsize=(max(9, len(L_values) * 1.8 + 1), 5.5))
 
     all_methods = [
-        (gamma_info,     gamma_depths),      # M0
-        (gamma_anc_info, gamma_anc_depths),  # M1
-        (fp2d_info,      fp2d_depths),       # M2
-        (fp1d_info,      fp1d_depths),       # M3
-        (baseline_info,  baseline_depths),   # M4
+        (fp1d_info,      fp1d_depths),       # M0 – FP-FFFT FSWAP baseline
+        (baseline_info,  baseline_depths),   # M1 – CT-FFFT
+        (fp2d_info,      fp2d_depths),       # M2 – FP-FFFT w/o ancillas
+        (gamma_anc_info, gamma_anc_depths),  # M3 – Gamma w/ ancillas
+        (gamma_info,     gamma_depths),      # M4 – Gamma w/o ancillas
     ]
 
     # Method markers placed on bar tops
     method_markers = [
-        (r"Gamma-FP-FFFT w/o ancillas: $\mathbf{O(N^{1/2})}$", "s", "#333333"),
-        (r"Gamma-FP-FFFT w/ ancillas: $\mathbf{O(N^{1/2})}$",  "P", "#333333"),
-        (r"FP-FFFT w/o ancillas: $\mathbf{O(N^{1/2})}$",       "D", "#333333"),
         (r"FP-FFFT FSWAP baseline: $\mathbf{O(N)}$",            "^", "#333333"),
         (r"CT-FFFT: $\mathbf{O(N)}$",                           "o", "#333333"),
+        (r"FP-FFFT w/o ancillas: $\mathbf{O(N^{1/2})}$",       "D", "#333333"),
+        (r"Gamma-FP-FFFT w/ ancillas: $\mathbf{O(N^{1/2})}$",  "P", "#333333"),
+        (r"Gamma-FP-FFFT w/o ancillas: $\mathbf{O(N^{1/2})}$", "s", "#333333"),
     ]
 
     bar_tops = []
     for method_idx, (info, depths) in enumerate(all_methods):
         bottom = np.zeros(len(L_values))
         xpos   = x + offsets[method_idx]
-        is_ct  = (method_idx == 4)
+        is_ct  = (method_idx == 1)
         for (label, color, in_legend), values in zip(info, depths):
             vals  = np.array(values, dtype=float)
             extra = dict(hatch="//", edgecolor="#aaaaaa", linewidth=0.3
@@ -473,6 +473,70 @@ def plot_depth_breakdown(df: pd.DataFrame, fig_dir: str):
     for (xpos, tops), (mlabel, marker, mc) in zip(bar_tops, method_markers):
         h = ax.scatter(xpos, tops, marker=marker, color=mc, s=20, zorder=5)
         marker_handles.append((h, mlabel))
+
+    # -- Reduction arrows from CT-FFFT to Gamma w/o ancillas -----------------
+    from matplotlib.patches import FancyArrowPatch
+    from matplotlib.path import Path as MPath
+
+    ct_xpos, ct_tops       = bar_tops[1]   # CT-FFFT
+    gamma_xpos, gamma_tops = bar_tops[4]   # Gamma w/o ancillas
+
+    for i in range(len(L_values)):
+        x0, y0 = ct_xpos[i], ct_tops[i]
+        x1, y1 = gamma_xpos[i], gamma_tops[i]
+        reduction = (y0 - y1) / y0 * 100
+
+        # Only draw when there's a positive reduction
+        if reduction <= 0:
+            continue
+
+        local_max = max(bar_tops[j][1][i] for j in range(5))
+        dx = x1 - x0
+        xm = (x0 + x1) / 2
+        pad = 0.04 * local_max
+
+        # Cubic Bézier arch with both controls at the same height h.
+        # B_y(t) = (1-t)³y0 + 3t(1-t)h + t³y1  (when P1_y = P2_y = h)
+        # Solve for h so curve clears each middle bar at its x-position.
+        P1x = x0 + dx * 0.3
+        P2x = x1 - dx * 0.3
+        P0 = np.array([x0, y0])
+        P3 = np.array([x1, y1])
+
+        t_samples = np.linspace(0, 1, 1000)
+        Bx = (1-t_samples)**3*x0 + 3*t_samples*(1-t_samples)**2*P1x \
+           + 3*t_samples**2*(1-t_samples)*P2x + t_samples**3*x1
+
+        required_h = max(y0, y1) + pad          # minimum: visible arc
+        for j in [2, 3]:
+            xj = bar_tops[j][0][i]
+            hj = bar_tops[j][1][i]
+            t_bar = t_samples[np.argmin(np.abs(Bx - xj))]
+            coeff = 3 * t_bar * (1 - t_bar)
+            baseline = (1 - t_bar)**3 * y0 + t_bar**3 * y1
+            needed = (hj + pad - baseline) / coeff
+            required_h = max(required_h, needed)
+
+        P1 = np.array([P1x, required_h])
+        P2 = np.array([P2x, required_h])
+
+        path = MPath(
+            [P0, P1, P2, P3],
+            [MPath.MOVETO, MPath.CURVE4, MPath.CURVE4, MPath.CURVE4],
+        )
+        arrow = FancyArrowPatch(
+            path=path, arrowstyle="-|>", color="#555555",
+            lw=1.5, mutation_scale=12, zorder=6,
+        )
+        ax.add_patch(arrow)
+
+        # Text at the curve midpoint (t=0.5): B_y = 0.125*y0 + 0.75*h + 0.125*y1
+        mid_y = 0.125 * y0 + 0.75 * required_h + 0.125 * y1
+        is_last = (i == len(L_values) - 1)
+        text_offset = 0.04 * local_max if is_last else 0.015 * local_max
+        ax.text(xm, mid_y + text_offset, f"{reduction:.0f}%",
+                ha="center", va="bottom",
+                fontsize=14, fontweight="bold", color="#555555")
 
     # -- Axes & labels -------------------------------------------------------
     # Font sizes: title 16, axis labels 14, tick labels 14, legends 9.
