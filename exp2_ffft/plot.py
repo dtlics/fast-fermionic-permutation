@@ -187,7 +187,7 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
         if not ct_data.empty:
             ax.semilogy(ct_data["N"], ct_data["mult_fidelity"],
                         marker=ct_style["marker"], color=ct_style["color"],
-                        label=ct_style["label"], linewidth=2.5, markersize=6)
+                        label=ct_style["label"], linewidth=3.5, markersize=7)
 
         # 2) Gamma-FP-FFFT w/ ancillas
         anc_N = [L * L for L in L_all]
@@ -197,7 +197,7 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
             ns, fs = zip(*anc_N_f)
             ax.semilogy(ns, fs, marker="P", color="C0",
                         label="Gamma-FP-FFFT w/ ancillas",
-                        linewidth=2.5, markersize=6)
+                        linewidth=3.5, markersize=7)
 
         # 3) Gamma-FP-FFFT w/o ancillas
         gp_style = METHOD_STYLES["gamma_2d_proper"]
@@ -206,25 +206,19 @@ def plot_fidelity_vs_N(df: pd.DataFrame, fig_dir: str):
         if not gp_data.empty:
             ax.semilogy(gp_data["N"], gp_data["mult_fidelity"],
                         marker=gp_style["marker"], color=gp_style["color"],
-                        label=gp_style["label"], linewidth=2.5, markersize=6)
+                        label=gp_style["label"], linewidth=3.5, markersize=7)
 
         ax.set_ylim(bottom=y_floor, top=2.0)
-        ax.set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=18)
-        ax.set_title(f"$\\mathbf{{p_{{2q}} = {p_2q:.0e}}}$", fontsize=19)
-        ax.tick_params(axis="both", labelsize=15)
+        ax.set_ylabel(r"$\mathbf{Estimated\;fidelity}$", fontsize=20)
+        ax.set_title(f"$\\mathbf{{p_{{2q}} = {p_2q:.0e}}}$", fontsize=21)
+        ax.tick_params(axis="both", labelsize=17)
         for lbl in ax.get_xticklabels() + ax.get_yticklabels():
             lbl.set_fontweight("bold")
         ax.grid(True, alpha=0.2)
-
-        # Only show x-label on the bottom panel
-        if idx < len(p_values) - 1:
-            ax.set_xlabel("")
-            ax.tick_params(axis="x", labelbottom=False)
-        else:
-            ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=18)
+        ax.set_xlabel(r"$\mathbf{N = L^2}$", fontsize=20)
 
     axes[0].legend(loc="lower left", framealpha=0.9,
-                   prop={"weight": "bold", "size": 13})
+                   prop={"weight": "bold", "size": 15})
     fig.tight_layout()
     _save_fig(fig, fig_dir, "fidelity_vs_N")
 
