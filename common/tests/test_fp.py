@@ -162,7 +162,7 @@ def test_end_to_end_all_baselines(L):
         dm_2_reshaped = dm_2_full.reshape([2] * n_total * 2)
         dm_2 = qp.math.partial_trace(
             dm_2_reshaped,
-            indices=[index for index in range(len(dm_2_reshaped.shape)) if index not in list(range(N))]
+            indices=[index for index in range(len(state_2_full.shape)) if index not in list(range(N))]
         ).reshape(2**N, 2**N)
 
         # Check all pairs agree
