@@ -157,7 +157,7 @@ def test_end_to_end_all_baselines(L):
         init_state_2[idx_2] = 1.0
         circ_2_full = qp.tape.qscript.QuantumScript(res_2.circuit.operations + [qp.Identity(q) for q in canonical_qubits], [qp.state()])
         result_2 = qp.execute([circ_2_full], dev, diff_method=None)
-        state_2_full = result_2
+        state_2_full = result_2[0]
         dm_2_full = np.outer(state_2_full, np.conj(state_2_full))
         dm_2_reshaped = dm_2_full.reshape([2] * n_total * 2)
         dm_2 = qp.math.partial_trace(
