@@ -86,7 +86,12 @@ class FSWAP(qp.operation.Operator):
         self.exponent = 1
         super().__init__(wires)
 
-    def compute_matrix(self, t):
+    def compute_decomposition(self, wires):
+        return [
+            qp.QubitUnitary(self.compute_matrix(), wires)
+        ]
+
+    def compute_matrix(self):
         p = qp.math.exp(1j * np.pi)
         g = qp.math.exp((1j * np.pi) / 2)
         s = qp.math.sin(np.pi / 2)

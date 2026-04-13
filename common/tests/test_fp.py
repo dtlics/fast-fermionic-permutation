@@ -113,7 +113,7 @@ def test_fp_1d_returns_fp_result():
 @pytest.mark.parametrize("L", [3])
 def test_end_to_end_all_baselines(L):
     """All 4 baselines produce the same density matrix for L=3."""
-    dev = qp.device('default.clifford', tableau=False)
+    dev = qp.device('default.qubit')
 
     rng = np.random.default_rng(42)
     N = L * L
@@ -187,7 +187,7 @@ def test_ancilla_disentanglement(L):
     rng = np.random.default_rng(42 + L)
     N = L * L
 
-    dev = qp.device('default.clifford', tableau=False)
+    dev = qp.device('default.qubit')
 
     perm = rng.permutation(N).tolist()
     res = build_fp_2d(L, perm, GammaMethod.ANCILLA)
@@ -210,12 +210,11 @@ def test_ancilla_disentanglement(L):
         result = qp.execute([circ_full], dev, diff_method=None)
 
         # Verify ancilla qubits are in |0> by checking reduced density matrix
-        sv = result.final_state_vector
+        sv = result[0]
         dm = np.outer(sv, np.conj(sv))
-        anc_indices = list(range(N, n_total))
         anc_dm = qp.math.partial_trace(
-            dm.reshape([2] * n_total * 2), indices=anc_indices
-        ).reshape(2**n_anc, 2**n_anc)
+            dm, indices=list(range(N))
+        )
         # If ancillas are in |0...0>, the density matrix is |0><0|
         expected = np.zeros((2**n_anc, 2**n_anc), dtype=complex)
         expected[0, 0] = 1.0
