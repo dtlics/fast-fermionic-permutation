@@ -68,8 +68,12 @@ def make_system_qubits(L: int) -> Dict[Tuple[int, int], qp.wires.Wires]:
 
 
 def make_ancilla_qubits(L: int) -> Dict[int, qp.wires.Wires]:
-    """Create L ancilla qubits (one per row), used by Baseline 2."""
-    return {r: qp.wires.Wires([f"anc_r{r}"]) for r in range(L)}
+    """Create L ancilla qubits at column L (one per row), used by Baseline 2.
+
+    Ancillas are placed one column to the right of the data grid,
+    physically adjacent to the rightmost data column (L-1).
+    """
+    return {r: qp.wires.Wires([f"({r}, {L})"]) for r in range(L)}
 
 
 # ---------------------------------------------------------------------------

@@ -19,8 +19,9 @@ from exp1_fp.plot import generate_all_plots
 
 def main():
     parser = argparse.ArgumentParser(description="Experiment 1: FP Benchmarking")
-    parser.add_argument("--L", nargs="+", type=int, default=[4, 6, 8, 10, 12, 14, 16],
-                        help="Grid side lengths (default: 4 6 8 10 12 14 16)")
+    parser.add_argument("--L", nargs="+", type=int,
+                        default=[4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30],
+                        help="Grid side lengths (default: 4 6 8 ... 30)")
     parser.add_argument("--perms", nargs="+", default=["reverse", "transpose", "random"],
                         help="Permutation types")
     parser.add_argument("--n-random", type=int, default=20,
@@ -29,8 +30,8 @@ def main():
                         help="2-qubit gate error rates")
     parser.add_argument("--p-idle-factor", type=float, default=0.1,
                         help="p_idle = p_2q * factor (default: 0.1)")
-    parser.add_argument("--shots", type=int, default=1000,
-                        help="Stim shots per instance (default: 1000)")
+    parser.add_argument("--shots", type=int, default=1_000_000,
+                        help="Stim shots per instance (default: 1000000)")
     parser.add_argument("--output-dir", default="exp1_fp/results",
                         help="Output directory for data")
     parser.add_argument("--fig-dir", default="exp1_fp/figures",

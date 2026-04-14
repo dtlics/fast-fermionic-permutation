@@ -1,17 +1,27 @@
 """Baseline 4: Pipelined ancilla-free Gamma (best construction).
 
 Fuses same-row T(x,x) with cross-row/skip-row T(x,y) into shared prefix
-cascade sweeps, reducing ancilla-free Gamma depth from 9L+12 to 8L+O(1).
+cascade sweeps.  This is the best known construction for ancilla-free Gamma.
 
-Depth formula (verified for L=3..20):
+Depth scaling
+-------------
     8L + 9   for odd  L >= 5
     8L + 10  for even L >= 6
+    (verified for L = 3..50)
 
-Verification status (completed):
-    - Matches Baseline 3 (ancilla-free primitive, 9L+12) for L=3..15,
-      500 random basis states each.  All PASS.
-    - Matches Baseline 2 (ancilla-based, 7L-3) for L=3 via full unitary.
-    - Property (*) passes 100% for L=3..11.
+Ancillas: 0
+Gate count: O(N)
+
+Cirq greedy scheduling achieves zero additional savings -- the manual
+pipelining already saturates all available parallelism.  (Verified: feeding
+all ops to one cirq.Circuit() produces identical depth.)
+
+Comparison with Baseline 3 (sequential primitives, 12L + 8):
+    The 4L saving comes from fusing same-row T with skip/cross-row T into
+    shared prefix cascade sweeps (Constructions A and B below).  The
+    interaction gates trail the cascade wavefront at fixed column offsets,
+    so multiple T(x,y) terms sharing the same source row fold into a single
+    forward-and-back sweep.
 
 Two pipelined constructions:
     Construction A (PipelineSameSkip): same-row T + skip-row T in parity basis
