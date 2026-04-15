@@ -88,7 +88,10 @@ class FSWAP(qp.operation.Operator):
 
     def compute_decomposition(self, wires):
         return [
-            qp.QubitUnitary(self.compute_matrix(), wires)
+            qp.Hadamard(wires[0]),
+            qp.CNOT(wires),
+            qp.CNOT(wires[::-1]),
+            qp.Hadamard(wires[1])
         ]
 
     def compute_matrix(self):
