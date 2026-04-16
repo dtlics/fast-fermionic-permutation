@@ -24,6 +24,30 @@ if TYPE_CHECKING:
     from common.fp_2d import FPResult
 
 
+def tape_to_qfunc(tape):
+    for op in tape.operations:
+        qp.apply(op)
+    for meas in tape.measurements:
+        qp.apply(meas)
+
+
+def get_resources(circ):
+
+    @qp.qnode(qp.device("default.clifford", tableau=False))
+    def qfunc():
+        tape_to_qfunc(circ)
+
+    return qp.specs(qfunc)().resources
+
+
+def optimize(circ):
+    [circ], _ = qp.transforms.commute_controlled(circ)
+    [circ], _ = qp.transforms.merge_rotations(circ)
+    [circ], _ = qp.transforms.cancel_inverses(circ, recursive=True)
+
+    return circ
+
+
 # ---------------------------------------------------------------------------
 # Core resource counter
 # ---------------------------------------------------------------------------
@@ -47,41 +71,21 @@ def count_resources(circuit: qp.tape.qscript.QuantumScript, L: int, n_ancillas: 
     N = L * L
     total_qubits = N + n_ancillas
 
-    two_q_depth = 0
-    cnot_depth = 0
-    total_2q_gates = 0
-    total_cnots = 0
-    total_idle_slots = 0
+    circuit = optimize(circuit)
+    resources = get_resources(circuit)
 
-    for op in circuit:
-        n_2q_in_moment = 0
-        has_fswap = False
-        if len(op.wires) >= 2:
-            n_2q_in_moment += 1
-            if is_fswap(op):
-                total_cnots += FSWAP_CNOT_COST
-                has_fswap = True
-            else:
-                total_cnots += 1
-
-        if n_2q_in_moment > 0:
-            two_q_depth += 1
-            # FSWAP decomposes into 2 CNOT-depth layers; CNOT/CZ = 1 layer
-            cnot_depth += 2 if has_fswap else 1
-            total_2q_gates += n_2q_in_moment
-            active_qubits = 2 * n_2q_in_moment
-            total_idle_slots += max(0, total_qubits - active_qubits)
+    [decomposed], _ = qp.decompose(circuit, gate_set=qp.decomposition.gate_sets.ALL_OPS)
+    decomposed_resources = get_resources(decomposed)
 
     return {
         "L": L,
         "N": N,
         "n_ancillas": n_ancillas,
         "total_qubits": total_qubits,
-        "cnot_depth": cnot_depth,
-        "two_q_depth": two_q_depth,
-        "total_2q_gates": total_2q_gates,
-        "total_cnots": total_cnots,
-        "total_idle_slots": total_idle_slots,
+        "cnot_depth": decomposed_resources.depth,
+        "two_q_depth": resources.depth,
+        "total_2q_gates": resources.gate_sizes[2],
+        "total_cnots": resources.gate_types["CNOT"],
     }
 
 
