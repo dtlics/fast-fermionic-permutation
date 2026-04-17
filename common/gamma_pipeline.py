@@ -12,9 +12,8 @@ Depth scaling
 Ancillas: 0
 Gate count: O(N)
 
-Cirq greedy scheduling achieves zero additional savings -- the manual
-pipelining already saturates all available parallelism.  (Verified: feeding
-all ops to one cirq.Circuit() produces identical depth.)
+Greedy scheduling achieves zero additional savings -- the manual
+pipelining already saturates all available parallelism.  (Verified)
 
 Comparison with Baseline 3 (sequential primitives, 12L + 8):
     The 4L saving comes from fusing same-row T with skip/cross-row T into

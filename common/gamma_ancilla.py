@@ -12,28 +12,9 @@ Without cross-step pipelining (step-separated construction):
     Stage C:  L - 1     (undo column parity + ancilla cascade)
     Stage D:  6L + 1    (rightward sweep, 6 per step, + diagonal correction)
     Total:    18L - 1   (exact for L >= 7)
-
-This implementation:
-    Total:    13L + 4   (exact for L >= 7)
-
-    The ops within each column step are emitted in logical order (substeps
-    1->2->3), but all steps are fed to one qp.Circuit() call, allowing
-    qp to merge the tail of step p with the head of step p+1 when they
-    touch disjoint qubits.  Savings breakdown:
-
-    Stage B (~2 saved/step, 10 -> ~8):
-      Substep 3 of step p (batch A + odd advance) overlaps with substep 1
-      of step p-1 (batch B SWAP), since they operate on disjoint row groups.
-
-    Stage D (~3 saved/step, 6 -> ~3):
-      Substep 3 of step p (odd advance) fully overlaps with substep 1 of
-      step p+1 (even advance), since even and odd rows are disjoint.
-      CZ gates also pack into advance moments on non-conflicting qubits.
-
-Ancillas start and end in |0>.  Data qubits return to columns 0..L-1.
 """
 
-from typing import Dict, List, Tuple
+from typing import List
 
 import pennylane as qp
 

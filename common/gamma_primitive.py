@@ -19,7 +19,7 @@ Phase-separated construction (this implementation, phases joined with +):
     Phase 4b (f_D cross-row T):    2L
     Total:   12L + 8   (exact for L >= 5)
 
-With cirq greedy pipelining (all ops in one cirq.Circuit, NOT used here):
+With greedy pipelining (NOT used here):
     Total:   9L + 12   (odd L) or 9L + 13 (even L), exact for L >= 5
     Main savings:
       P2a + P2b1: same-row T on even rows overlaps with skip-row T
