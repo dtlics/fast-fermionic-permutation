@@ -1,8 +1,7 @@
 """Experiment 1: data collection for FP benchmarking.
 
 Sweeps over grid sizes, permutation types, and baselines.
-Computes CNOT depth, spacetime volume, multiplicative fidelity, and
-Stim noisy Clifford fidelity.
+Computes CNOT depth, spacetime volume, and Stim noisy Clifford fidelity.
 
 Saves incremental results after each L value to avoid losing progress.
 """
@@ -18,7 +17,7 @@ import pandas as pd
 
 from common.fp_1d import build_benchmark_permutation, build_fp_1d
 from common.fp_2d import FPResult, GammaMethod, build_fp_2d
-from common.metrics import count_resources, multiplicative_fidelity, spacetime_volume
+from common.metrics import count_resources
 from common.stim_convert import simulate_clifford_fidelity
 
 
@@ -64,11 +63,6 @@ def collect_instance(
         for p_2q in p_values:
             p_idle = p_2q * p_idle_factor
 
-            mult_fid = multiplicative_fidelity(
-                res["total_2q_gates"], res["total_idle_slots"],
-                p_2q=p_2q, p_idle=p_idle,
-            )
-
             if shots > 0:
                 stim_fid = simulate_clifford_fidelity(
                     result.circuit, qo,
@@ -86,13 +80,9 @@ def collect_instance(
                 "n_ancillas": res["n_ancillas"],
                 "total_qubits": res["total_qubits"],
                 "cnot_depth": res["cnot_depth"],
-                "total_2q_gates": res["total_2q_gates"],
-                "total_cnots": res["total_cnots"],
-                "total_idle_slots": res["total_idle_slots"],
-                "spacetime_volume": spacetime_volume(res["total_qubits"], res["cnot_depth"]),
+                "spacetime_volume": res["spacetime_volume"],
                 "p_2q": p_2q,
                 "p_idle": p_idle,
-                "mult_fidelity": mult_fid,
                 "stim_fidelity": stim_fid,
                 "stim_shots": shots,
             })
