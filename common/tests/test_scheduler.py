@@ -25,5 +25,5 @@ from common.scheduler import greedy_schedule
 def test_gamma_primitive_depth(circuit, expected):
     """Verify that the scheduler works as expected."""
 
-    moments = greedy_schedule(circuit)
+    moments, _ = greedy_schedule(circuit)
     assert moments == expected

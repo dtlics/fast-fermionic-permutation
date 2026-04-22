@@ -4,12 +4,13 @@ import pennylane as qp
 
 
 def greedy_schedule(circuit):
-    dag = qp.commutation_dag(circuit)
+    dag = qp.commutation_dag(circuit)  # TODO: replace with CircuitGraph
     nodes = dag.get_nodes()
 
     time = 0
     moments = []
     scheduled_ids = []
+    scheduled_id_map = []
 
     while len(scheduled_ids) < len(nodes):
         moments.append([])
@@ -17,6 +18,7 @@ def greedy_schedule(circuit):
 
         # check if we can schedule each node
         for i, node in nodes:
+
             # check if we already scheduled this node
             if node.node_id in scheduled_ids:
                 continue
@@ -47,5 +49,6 @@ def greedy_schedule(circuit):
 
         time += 1
         scheduled_ids += moment_ids
+        scheduled_id_map.append(moment_ids)
 
-    return moments
+    return moments, scheduled_id_map
