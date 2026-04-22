@@ -39,7 +39,7 @@ def greedy_schedule(circuit):
                 if wire in moment_wires:
                     found = True
             if found:
-                continue  # we can't schedule it do to a wire collision
+                continue  # we can't schedule it due to a wire collision
 
             # schedule the op in the current time slice
             moments[time].append(node.op)
