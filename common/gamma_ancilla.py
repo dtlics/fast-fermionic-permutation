@@ -253,8 +253,8 @@ def build_gamma_with_ancillas(L: int, sq=None, aq=None):
     # Stage A: column parity cascade (no cross-stage merging with B)
     stage_a = _build_stage_A(L)
 
-    # Stage B: leftward sweep.  All steps fed to one qp.tape.qscript.QuantumScript() so
-    # the greedy scheduler can pipeline across step boundaries.
+    # Stage B: leftward sweep.  All step ops concatenated into a single list
+    # so the downstream greedy scheduler can pipeline across step boundaries.
     # Savings: substep 3 of step p (batch A + odd advance) overlaps with
     # substep 1 of step p-1 (batch B SWAP) on disjoint rows.  ~2/step.
     stage_b_ops = []
@@ -265,8 +265,8 @@ def build_gamma_with_ancillas(L: int, sq=None, aq=None):
     # Stage C: undo column parity (no cross-stage merging)
     stage_c = _build_stage_C(L)
 
-    # Stage D: rightward sweep.  All steps fed to one qp.Circuit() so
-    # the greedy scheduler can pipeline across step boundaries.
+    # Stage D: rightward sweep.  All step ops concatenated into a single list
+    # so the downstream greedy scheduler can pipeline across step boundaries.
     # Savings: substep 3 of step p (odd advance) fully overlaps with
     # substep 1 of step p+1 (even advance) on disjoint rows.  ~3/step.
     stage_d_ops = []

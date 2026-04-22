@@ -1,15 +1,15 @@
 """Metrics for fermionic permutation circuit evaluation.
 
-Three metrics (all ignore single-qubit gate layers):
+Flow: decompose composite 2-qubit gates (FSWAP etc.) -> optimize with passes -> run ``qp.specs`` on a Clifford device to read out depth and 2-qubit gate count.
 
-1. **CNOT depth**: Number of CNOT/CZ-equivalent depth layers.
-   FSWAP moments contribute 2 layers (FSWAP decomposes into 2 entangling
-   layers); CNOT/CZ-only moments contribute 1 layer.
+Single-qubit gates are treated as free.
 
-2. **Spacetime volume**: S = total_qubits * cnot_depth
+Metrics:
 
-3. **Multiplicative fidelity estimate**: F = (1-p_2q)^G * (1-p_idle)^I
-   where G = total 2q gates, I = total idle-qubit-moments
+1. **CNOT depth**: ``resources.depth`` after decompose + optimize.
+2. **Spacetime volume**: ``total_qubits * cnot_depth`` (includes ancillas).
+3. **Idle qubit-moments**: ``spacetime - 2 * total_2q_gates``.
+4. **Multiplicative fidelity**: ``(1-p_2q)^G * (1-p_idle)^I``.
 """
 
 from __future__ import annotations
@@ -17,8 +17,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Dict
 
 import pennylane as qp
-
-from common.fswap import FSWAP_CNOT_COST, is_fswap
 
 if TYPE_CHECKING:
     from common.fp_2d import FPResult
@@ -32,7 +30,6 @@ def tape_to_qfunc(tape):
 
 
 def get_resources(circ):
-
     @qp.qnode(qp.device("default.clifford", tableau=False))
     def qfunc():
         tape_to_qfunc(circ)
@@ -40,52 +37,43 @@ def get_resources(circ):
     return qp.specs(qfunc)().resources
 
 
+def decompose(circ):
+    [circ], _ = qp.transforms.decompose(circ)
+    return circ
+
+
 def optimize(circ):
     [circ], _ = qp.transforms.commute_controlled(circ)
     [circ], _ = qp.transforms.merge_rotations(circ)
     [circ], _ = qp.transforms.cancel_inverses(circ, recursive=True)
-
     return circ
 
 
 # ---------------------------------------------------------------------------
-# Core resource counter
+# Core resource counter: decompose -> optimize -> specs
 # ---------------------------------------------------------------------------
 
 def count_resources(circuit: qp.tape.qscript.QuantumScript, L: int, n_ancillas: int = 0) -> Dict:
-    """Count gate resources for a fermionic permutation circuit.
-
-    Scans every moment.  Only moments containing at least one 2-qubit gate
-    contribute to depth and idle-slot counts (single-qubit-only moments are
-    ignored -- single-qubit gates are "free").
-
-    Returns:
-        dict with keys:
-            L, N, n_ancillas, total_qubits,
-            cnot_depth,     -- CNOT/CZ-equivalent depth (FSWAP moments = 2)
-            two_q_depth,    -- moments with >= 1 two-qubit gate
-            total_2q_gates, -- total number of 2-qubit gate applications
-            total_cnots,    -- CNOT-equivalent count (FSWAP=2, CZ/CNOT=1)
-            total_idle_slots, -- sum over 2q moments of idle qubit count
-    """
     N = L * L
     total_qubits = N + n_ancillas
 
+    circuit = decompose(circuit)
     circuit = optimize(circuit)
     resources = get_resources(circuit)
 
-    [decomposed], _ = qp.decompose(circuit, gate_set=qp.decomposition.gate_sets.ALL_OPS)
-    decomposed_resources = get_resources(decomposed)
+    depth = resources.depth
+    total_2q_gates = resources.gate_sizes.get(2, 0)
+    spacetime = total_qubits * depth
 
     return {
         "L": L,
         "N": N,
         "n_ancillas": n_ancillas,
         "total_qubits": total_qubits,
-        "cnot_depth": decomposed_resources.depth,
-        "two_q_depth": resources.depth,
-        "total_2q_gates": resources.gate_sizes[2],
-        "total_cnots": resources.gate_types["CNOT"],
+        "cnot_depth": depth,
+        "total_2q_gates": total_2q_gates,
+        "spacetime_volume": spacetime,
+        "total_idle_slots": spacetime - 2 * total_2q_gates,
     }
 
 
@@ -108,17 +96,7 @@ def multiplicative_fidelity(
     p_2q: float = 1e-3,
     p_idle: float = 1e-4,
 ) -> float:
-    """Fidelity estimate: F = (1-p_2q)^G * (1-p_idle)^I.
-
-    Args:
-        total_2q_gates: G -- total two-qubit gate applications
-        total_idle_slots: I -- total idle-qubit-moments
-        p_2q: error rate per two-qubit gate
-        p_idle: error rate per idle qubit per time step
-
-    Returns:
-        estimated fidelity in [0, 1]
-    """
+    """Fidelity estimate: F = (1-p_2q)^G * (1-p_idle)^I."""
     return (1.0 - p_2q) ** total_2q_gates * (1.0 - p_idle) ** total_idle_slots
 
 
@@ -131,17 +109,9 @@ def evaluate_fp(
     p_2q: float = 1e-3,
     p_idle: float = 1e-4,
 ) -> Dict:
-    """Compute all metrics for a fermionic permutation circuit result.
-
-    Returns:
-        dict with all count_resources fields plus:
-            spacetime_volume, fidelity, gamma_method
-    """
+    """Compute all metrics for a fermionic permutation circuit result."""
     resources = count_resources(
         result.circuit, result.L, len(result.anc_qubits)
-    )
-    resources["spacetime_volume"] = spacetime_volume(
-        resources["total_qubits"], resources["cnot_depth"]
     )
     resources["fidelity"] = multiplicative_fidelity(
         resources["total_2q_gates"],

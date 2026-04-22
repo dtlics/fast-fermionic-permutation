@@ -211,7 +211,7 @@ def build_gamma_pipelined(L: int, sq=None):
 
     Args:
         L: grid side length
-        sq: optional system qubit dict {(r,c): Qid}.  Created internally if None.
+        sq: optional system qubit dict {(r,c): Wires}.  Created internally if None.
 
     Returns:
         (circuit, sys_list)
