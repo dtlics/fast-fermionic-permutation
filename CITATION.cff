@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this code or data, please cite the paper."
+title: "Asymptotically Optimal Depth Fermionic Permutation on 2D Grid Quantum Architecture without Ancillas — code and data"
+type: software
+version: 1.0-prxq
+date-released: 2026-09-07
+repository-code: "https://github.com/dtlics/fast-fermionic-permutation"
+doi: 10.5281/zenodo.22646475
+license: MIT
+authors:
+  - family-names: Li
+    given-names: Dantong
+    affiliation: "Yale University"
+  - family-names: Xu
+    given-names: Shifan
+    affiliation: "Yale University"
+  - family-names: Ding
+    given-names: Yongshan
+    affiliation: "Yale University"
+preferred-citation:
+  type: article
+  title: "Asymptotically Optimal Depth Fermionic Permutation on 2D Grid Quantum Architecture without Ancillas"
+  authors:
+    - family-names: Li
+      given-names: Dantong
+    - family-names: Xu
+      given-names: Shifan
+    - family-names: Ding
+      given-names: Yongshan
+  year: 2026
+  journal: "arXiv preprint arXiv:2605.26041"
+  doi: 10.48550/arXiv.2605.26041
+  url: "https://arxiv.org/abs/2605.26041"
+  notes: "Submitted to PRX Quantum"

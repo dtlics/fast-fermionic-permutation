@@ -1,0 +1,11 @@
+cirq==1.7.0
+openfermion==1.8.1
+stim==1.16.0
+numpy==2.5.2
+pandas==3.0.5
+matplotlib==3.11.1
+networkx==3.6.1
+scipy==1.18.0
+pypdf==6.10.0
+reportlab==4.4.9
+pytest==9.1.1

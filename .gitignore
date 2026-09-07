@@ -1,0 +1,21 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# local sweep outputs (the official data live in exp*/results)
+/out/
+/tmp/
+
+# the manuscript lives in its own repository and is not part of this one
+/paper/
+
+# private backup of the pre-publication history; keep it out of the public tree
+*.bundle
